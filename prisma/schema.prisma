@@ -1,0 +1,394 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  MANAGER
+  STAFF
+  VISITOR
+}
+
+enum UserStatus {
+  PENDING_APPROVAL
+  ACTIVE
+  SUSPENDED
+}
+
+enum RecordType {
+  INCOME        // Money Received
+  EXPENSE       // Money Spent
+  RECEIVABLE    // Due to Receive
+  PAYABLE       // Due to Pay
+}
+
+enum ServiceCategory {
+  FLIGHT_TICKET
+  BUS_TICKET
+  HOTEL_BOOKING
+  TOUR_PACKAGE
+  PASSPORT_SERVICE
+  VISA_SERVICE
+  VEHICLE_RENTAL
+  OFFICE_EXPENSE
+  COMMISSION
+  OTHER
+}
+
+enum PaymentMode {
+  CASH
+  UPI
+  BANK_TRANSFER
+  CARD
+  CREDIT_UNPAID
+}
+
+enum PaymentStatus {
+  COMPLETED
+  PARTIAL
+  PENDING
+}
+
+enum MonthStatus {
+  OPEN
+  CLOSED
+}
+
+enum AuditAction {
+  LOGIN
+  LOGOUT
+  CREATE_RECORD
+  UPDATE_RECORD
+  VOID_RECORD
+  DELETE_RECORD
+  CLOSE_MONTH
+  UNLOCK_MONTH
+  IMPORT_EXCEL
+  UNDO_IMPORT
+  EXPORT_REPORT
+  USER_STATUS_CHANGE
+  USER_ROLE_CHANGE
+}
+
+model User {
+  id                 String     @id @default(uuid())
+  email              String     @unique
+  passwordHash       String
+  name               String
+  role               Role       @default(STAFF)
+  status             UserStatus @default(PENDING_APPROVAL)
+  mustChangePassword Boolean    @default(true)
+  twoFactorSecret    String?
+  twoFactorEnabled   Boolean    @default(false)
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  createdRecords     NoteRecord[] @relation("CreatedBy")
+  updatedRecords     NoteRecord[] @relation("UpdatedBy")
+  voidedRecords      NoteRecord[] @relation("VoidedBy")
+  closedMonths       MonthPeriod[] @relation("ClosedBy")
+  unlockedMonths     MonthPeriod[] @relation("UnlockedBy")
+  auditLogs          AuditLog[]
+  importBatches      ImportBatch[]
+}
+
+model BusinessProfile {
+  id                String   @id @default(uuid())
+  name              String   @default("Sai Tours and Travels")
+  legalName         String   @default("Sai Tours and Travels")
+  gstin             String?
+  address           String?
+  phone             String?
+  email             String?  @default("saipassportmdu@gmail.com")
+  currency          String   @default("INR")
+  currencySymbol    String   @default("₹")
+  logoUrl           String?  @default("/brand/logo.jpg")
+  financialYearStart Int     @default(4) // April
+  defaultGstRate    Decimal  @default(5.00) @db.Decimal(5, 2)
+  aiEnabled         Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model Customer {
+  id                String       @id @default(uuid())
+  name              String
+  phone             String?
+  email             String?
+  encryptedPassport String?
+  encryptedAadhaar  String?
+  address           String?
+  notes             String?
+  totalBilled       Decimal      @default(0.00) @db.Decimal(15, 2)
+  totalPaid         Decimal      @default(0.00) @db.Decimal(15, 2)
+  balanceDue        Decimal      @default(0.00) @db.Decimal(15, 2)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  records           NoteRecord[]
+  bookings          TravelBooking[]
+  documents         DocumentAttachment[]
+}
+
+model Supplier {
+  id                String          @id @default(uuid())
+  name              String
+  phone             String?
+  email             String?
+  category          ServiceCategory @default(OTHER)
+  gstin             String?
+  bankDetails       String?
+  totalBilled       Decimal         @default(0.00) @db.Decimal(15, 2)
+  totalPaid         Decimal         @default(0.00) @db.Decimal(15, 2)
+  balanceDue        Decimal         @default(0.00) @db.Decimal(15, 2)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  records           NoteRecord[]
+}
+
+model TravelBooking {
+  id                String          @id @default(uuid())
+  bookingCode       String          @unique
+  serviceType       ServiceCategory
+  destination       String?
+  departureDate     DateTime?
+  returnDate        DateTime?
+  passengerCount    Int             @default(1)
+  pnrNumber         String?
+  status            String          @default("CONFIRMED") // CONFIRMED, COMPLETED, CANCELLED
+  totalAmount       Decimal         @default(0.00) @db.Decimal(15, 2)
+  advanceAmount     Decimal         @default(0.00) @db.Decimal(15, 2)
+  balanceAmount     Decimal         @default(0.00) @db.Decimal(15, 2)
+  notes             String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  customerId        String?
+  customer          Customer?       @relation(fields: [customerId], references: [id])
+  records           NoteRecord[]
+}
+
+model NoteRecord {
+  id                String          @id @default(uuid())
+  recordNumber      String          @unique // e.g., REC-2026-0001
+  title             String
+  notes             String?
+  type              RecordType
+  category          ServiceCategory @default(OTHER)
+  amount            Decimal         @db.Decimal(15, 2)
+  amountPaid        Decimal         @default(0.00) @db.Decimal(15, 2)
+  balanceDue        Decimal         @default(0.00) @db.Decimal(15, 2)
+  paymentMode       PaymentMode     @default(CASH)
+  paymentStatus     PaymentStatus   @default(COMPLETED)
+  gstRate           Decimal         @default(0.00) @db.Decimal(5, 2)
+  gstAmount         Decimal         @default(0.00) @db.Decimal(15, 2)
+  commissionAmount  Decimal         @default(0.00) @db.Decimal(15, 2)
+  discountAmount    Decimal         @default(0.00) @db.Decimal(15, 2)
+  date              DateTime        @default(now())
+  tags              String[]        @default([])
+  isPinned          Boolean         @default(false)
+  color             String?         @default("amber") // amber, emerald, sky, rose, indigo, purple
+
+  customerId        String?
+  customer          Customer?       @relation(fields: [customerId], references: [id])
+  supplierId        String?
+  supplier          Supplier?       @relation(fields: [supplierId], references: [id])
+  bookingId         String?
+  booking           TravelBooking?  @relation(fields: [bookingId], references: [id])
+
+  createdById       String
+  createdBy         User            @relation("CreatedBy", fields: [createdById], references: [id])
+  updatedById       String?
+  updatedBy         User?           @relation("UpdatedBy", fields: [updatedById], references: [id])
+
+  isVoid            Boolean         @default(false)
+  voidReason        String?
+  voidedAt          DateTime?
+  voidedById        String?
+  voidedBy          User?           @relation("VoidedBy", fields: [voidedById], references: [id])
+
+  monthPeriodId     String?
+  monthPeriod       MonthPeriod?    @relation(fields: [monthPeriodId], references: [id])
+
+  importBatchId     String?
+  importBatch       ImportBatch?    @relation(fields: [importBatchId], references: [id])
+
+  aiParsed          Boolean         @default(false)
+  aiConfidence      Decimal?        @db.Decimal(5, 2)
+
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  attachments       DocumentAttachment[]
+
+  @@index([date])
+  @@index([type])
+  @@index([category])
+  @@index([createdById])
+  @@index([isVoid])
+}
+
+model DocumentAttachment {
+  id                String      @id @default(uuid())
+  fileName          String
+  fileUrl           String
+  fileType          String
+  fileSize          Int
+  extractedText     String?
+  recordId          String?
+  record            NoteRecord? @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  customerId        String?
+  customer          Customer?   @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  createdAt         DateTime    @default(now())
+}
+
+model MonthPeriod {
+  id                String      @id @default(uuid())
+  periodKey         String      @unique // e.g. "2026-09"
+  year              Int
+  month             Int         // 1-12
+  status            MonthStatus @default(OPEN)
+  closedAt          DateTime?
+  closedById        String?
+  closedBy          User?       @relation("ClosedBy", fields: [closedById], references: [id])
+  unlockedAt        DateTime?
+  unlockedById      String?
+  unlockedBy        User?       @relation("UnlockedBy", fields: [unlockedById], references: [id])
+  unlockReason      String?
+
+  totalIncome       Decimal     @default(0.00) @db.Decimal(15, 2)
+  totalExpense      Decimal     @default(0.00) @db.Decimal(15, 2)
+  netProfit         Decimal     @default(0.00) @db.Decimal(15, 2)
+  cashBalance       Decimal     @default(0.00) @db.Decimal(15, 2)
+  bankBalance       Decimal     @default(0.00) @db.Decimal(15, 2)
+  customerDues      Decimal     @default(0.00) @db.Decimal(15, 2)
+  supplierDues      Decimal     @default(0.00) @db.Decimal(15, 2)
+  totalGstCollected Decimal     @default(0.00) @db.Decimal(15, 2)
+  totalGstPaid      Decimal     @default(0.00) @db.Decimal(15, 2)
+  snapshotData      Json?
+
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  records           NoteRecord[]
+}
+
+model AuditLog {
+  id          String      @id @default(uuid())
+  timestamp   DateTime    @default(now())
+  userId      String?
+  user        User?       @relation(fields: [userId], references: [id])
+  action      AuditAction
+  entityType  String?
+  entityId    String?
+  ipAddress   String?
+  userAgent   String?
+  details     String?
+  beforeState Json?
+  afterState  Json?
+
+  @@index([timestamp])
+  @@index([userId])
+  @@index([action])
+}
+
+model ImportBatch {
+  id            String       @id @default(uuid())
+  fileName      String
+  totalRows     Int          @default(0)
+  importedRows  Int          @default(0)
+  failedRows    Int          @default(0)
+  isUndone      Boolean      @default(false)
+  createdAt     DateTime     @default(now())
+  createdById   String
+  createdBy     User         @relation(fields: [createdById], references: [id])
+
+  records       NoteRecord[]
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PAID
+  CANCELLED
+}
+
+model Invoice {
+  id              String        @id @default(uuid())
+  invoiceNumber   String        @unique // e.g. INV-2026-0001
+  date            DateTime      @default(now())
+  dueDate         DateTime?
+  customerId      String?
+  customerName    String
+  customerPhone   String?
+  customerEmail   String?
+  customerGstin   String?
+  customerAddress String?
+  serviceType     ServiceCategory @default(OTHER)
+  description     String
+  hsnSacCode      String        @default("998553") // Standard SAC for Tour Operator Services
+  pnrOrDetails    String?
+  baseAmount      Decimal       @db.Decimal(15, 2)
+  cgstAmount      Decimal       @default(0.00) @db.Decimal(15, 2)
+  sgstAmount      Decimal       @default(0.00) @db.Decimal(15, 2)
+  igstAmount      Decimal       @default(0.00) @db.Decimal(15, 2)
+  totalAmount     Decimal       @db.Decimal(15, 2)
+  amountPaid      Decimal       @default(0.00) @db.Decimal(15, 2)
+  balanceDue      Decimal       @default(0.00) @db.Decimal(15, 2)
+  status          InvoiceStatus @default(ISSUED)
+  notes           String?
+  paymentTerms    String?       @default("Immediate settlement upon voucher issuance.")
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+enum PassportAppStatus {
+  DOCS_COLLECTING
+  APPLICATION_FILED
+  APPOINTMENT_SCHEDULED
+  VERIFICATION_PENDING
+  PASSPORT_DISPATCHED
+  COMPLETED
+}
+
+model PassportApplication {
+  id                 String            @id @default(uuid())
+  applicantName      String
+  phone              String
+  email              String?
+  serviceType        String            @default("Fresh Normal") // Fresh Normal, Tatkal, Renewal
+  arnNumber          String?
+  appointmentDate    DateTime?
+  pskLocation        String?           @default("Madurai PSK")
+  status             PassportAppStatus @default(DOCS_COLLECTING)
+  checklistItems     String[]          @default(["Aadhaar Card", "Birth Certificate / 10th Marksheet", "Annexure D", "Fee Receipt"])
+  documentsCollected String[]          @default([])
+  governmentFee      Decimal           @default(1500.00) @db.Decimal(15, 2)
+  serviceCharge      Decimal           @default(1000.00) @db.Decimal(15, 2)
+  totalCharge        Decimal           @default(2500.00) @db.Decimal(15, 2)
+  amountPaid         Decimal           @default(0.00) @db.Decimal(15, 2)
+  balanceDue         Decimal           @default(2500.00) @db.Decimal(15, 2)
+  notes              String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+}
+
+model Branch {
+  id          String   @id @default(uuid())
+  name        String
+  code        String   @unique // MDU, TRY, MAA
+  city        String
+  phone       String?
+  address     String?
+  isMain      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
+

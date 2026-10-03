@@ -1,0 +1,41 @@
+# Git and IDE
+.git
+.gitignore
+.agents
+.gemini
+.vscode
+.idea
+
+# Node and build outputs
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.next
+out
+dist
+build
+*.tsbuildinfo
+
+# Sensitive credentials and environment files
+.env
+.env*.local
+.env.development
+.env.test
+.env.production
+*.pem
+*.key
+*.cert
+*.crt
+
+# Backups and temporary files
+backups/
+*.bak
+*.tmp
+*.log
+
+# Documentation and tests
+tests/
+playwright-report/
+test-results/
+*.md
