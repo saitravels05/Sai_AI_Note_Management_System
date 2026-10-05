@@ -75,6 +75,11 @@ enum AuditAction {
   EXPORT_REPORT
   USER_STATUS_CHANGE
   USER_ROLE_CHANGE
+  OTP_REQUESTED
+  OTP_FAILED
+  OTP_VERIFIED
+  PASSWORD_RESET_SUCCESS
+  PASSWORD_RESET_BLOCKED
 }
 
 model User {
@@ -85,6 +90,7 @@ model User {
   role               Role       @default(STAFF)
   status             UserStatus @default(PENDING_APPROVAL)
   mustChangePassword Boolean    @default(true)
+  tokenVersion       Int        @default(1)
   twoFactorSecret    String?
   twoFactorEnabled   Boolean    @default(false)
   createdAt          DateTime   @default(now())
@@ -97,6 +103,50 @@ model User {
   unlockedMonths     MonthPeriod[] @relation("UnlockedBy")
   auditLogs          AuditLog[]
   importBatches      ImportBatch[]
+  passwordResetOtps   PasswordResetOtp[]
+  passwordResetTokens PasswordResetToken[]
+  passwordHistories   PasswordHistory[]
+}
+
+model PasswordResetOtp {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  otpHash       String
+  expiresAt     DateTime
+  attemptsCount Int      @default(0)
+  isUsed        Boolean  @default(false)
+  ipAddress     String?
+  userAgent     String?
+  createdAt     DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  isUsed    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@index([expiresAt])
+}
+
+model PasswordHistory {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  passwordHash String
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
 }
 
 model BusinessProfile {

@@ -23,6 +23,7 @@ export interface SessionUser {
   name: string;
   role: Role;
   mustChangePassword?: boolean;
+  tokenVersion?: number;
 }
 
 export async function createSessionToken(user: SessionUser): Promise<string> {
@@ -32,6 +33,7 @@ export async function createSessionToken(user: SessionUser): Promise<string> {
     name: user.name,
     role: user.role,
     mustChangePassword: user.mustChangePassword ?? false,
+    tokenVersion: user.tokenVersion ?? 1,
   })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
@@ -63,15 +65,29 @@ export async function getSession(): Promise<SessionUser | null> {
 
     const { payload } = await jwtVerify(token, getSecretKey());
     const userId = payload.id as string;
+    const sessionTokenVersion = (payload.tokenVersion as number) ?? 1;
 
     // Database revocation & suspension check (Defense-in-depth)
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, email: true, name: true, role: true, status: true, mustChangePassword: true },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        status: true,
+        mustChangePassword: true,
+        tokenVersion: true,
+      },
     });
 
     if (!user || user.status !== UserStatus.ACTIVE) {
       // User account was suspended, deleted, or revoked
+      return null;
+    }
+
+    // Instant session invalidation across all devices if password was reset
+    if (user.tokenVersion !== sessionTokenVersion) {
       return null;
     }
 
@@ -81,6 +97,7 @@ export async function getSession(): Promise<SessionUser | null> {
       name: user.name,
       role: user.role,
       mustChangePassword: user.mustChangePassword,
+      tokenVersion: user.tokenVersion,
     };
   } catch {
     return null;

@@ -15,7 +15,14 @@ function getSecretKey(): Uint8Array {
   return new TextEncoder().encode(secret);
 }
 
-const PUBLIC_PATHS = ["/login", "/signup", "/api/health"];
+const PUBLIC_PATHS = [
+  "/login",
+  "/signup",
+  "/forgot-password",
+  "/api/health",
+  "/api/auth",
+  "/api/cron",
+];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;

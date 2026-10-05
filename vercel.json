@@ -20,6 +20,10 @@
     {
       "path": "/api/cron/payment-reminders",
       "schedule": "30 3 * * *"
+    },
+    {
+      "path": "/api/cron/cleanup-auth-tokens",
+      "schedule": "0 2 * * *"
     }
   ],
   "headers": [
