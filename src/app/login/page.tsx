@@ -25,7 +25,15 @@ export default function LoginPage() {
         window.location.href = res.redirectTo;
       }
     } catch (err: any) {
-      setError(err.message || "An unexpected error occurred");
+      console.error("[LOGIN ERROR]", err);
+      const raw = String(err?.message || "");
+      if (raw.includes("441") || raw.includes("Minified React error") || raw.includes("Server Components")) {
+        setError(
+          "Database connection error: The server could not connect to PostgreSQL. Please ensure the database is running (run 'npm run db:start')."
+        );
+      } else {
+        setError(err.message || "An unexpected error occurred. Please try again.");
+      }
       setIsLoading(false);
     }
   };

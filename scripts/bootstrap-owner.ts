@@ -32,6 +32,7 @@ async function main() {
   const owner = await prisma.user.upsert({
     where: { email },
     update: {
+      passwordHash,
       role: Role.OWNER,
       status: UserStatus.ACTIVE,
       mustChangePassword: true,

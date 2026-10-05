@@ -15,9 +15,25 @@ export interface AuthResponse {
   redirectTo?: string;
 }
 
+function formatDbError(err: any): string {
+  const msg = String(err?.message || "");
+  if (
+    msg.includes("Can't reach database") ||
+    msg.includes("ECONNREFUSED") ||
+    msg.includes("PrismaClientInitializationError") ||
+    msg.includes("connect ECONNREFUSED") ||
+    msg.includes("ETIMEDOUT") ||
+    msg.includes("connection closed")
+  ) {
+    return "Cannot connect to the database server. Please ensure PostgreSQL is running (run 'npm run db:start').";
+  }
+  return err?.message || "An unexpected error occurred during authentication.";
+}
+
 export async function loginAction(formData: FormData): Promise<AuthResponse> {
-  const email = (formData.get("email") as string)?.toLowerCase().trim();
-  const password = formData.get("password") as string;
+  try {
+    const email = (formData.get("email") as string)?.toLowerCase().trim();
+    const password = formData.get("password") as string;
 
   if (!email || !password) {
     return { success: false, error: "Please enter both email and password." };
@@ -99,114 +115,128 @@ export async function loginAction(formData: FormData): Promise<AuthResponse> {
   }
 
   return { success: true, redirectTo: "/" };
+  } catch (err: any) {
+    console.error("[AUTH ERROR] loginAction:", err);
+    return { success: false, error: formatDbError(err) };
+  }
 }
 
 export async function signupAction(formData: FormData): Promise<AuthResponse> {
-  const name = (formData.get("name") as string)?.trim();
-  const email = (formData.get("email") as string)?.toLowerCase().trim();
-  const password = formData.get("password") as string;
+  try {
+    const name = (formData.get("name") as string)?.trim();
+    const email = (formData.get("email") as string)?.toLowerCase().trim();
+    const password = formData.get("password") as string;
 
-  if (!name || !email || !password) {
-    return { success: false, error: "All fields are required." };
+    if (!name || !email || !password) {
+      return { success: false, error: "All fields are required." };
+    }
+
+    // Enforce enterprise password policy
+    const passwordValidation = validatePasswordStrength(password);
+    if (!passwordValidation.valid) {
+      return { success: false, error: passwordValidation.reason };
+    }
+
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      return { success: false, error: "An account with this email already exists." };
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    await prisma.user.create({
+      data: {
+        name,
+        email,
+        passwordHash,
+        role: Role.STAFF,
+        status: UserStatus.PENDING_APPROVAL,
+        mustChangePassword: false,
+      },
+    });
+
+    return {
+      success: true,
+      redirectTo: "/login?message=Account+created.+Please+wait+for+Owner+approval.",
+    };
+  } catch (err: any) {
+    console.error("[AUTH ERROR] signupAction:", err);
+    return { success: false, error: formatDbError(err) };
   }
-
-  // Enforce enterprise password policy
-  const passwordValidation = validatePasswordStrength(password);
-  if (!passwordValidation.valid) {
-    return { success: false, error: passwordValidation.reason };
-  }
-
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) {
-    return { success: false, error: "An account with this email already exists." };
-  }
-
-  const passwordHash = await bcrypt.hash(password, 12);
-
-  await prisma.user.create({
-    data: {
-      name,
-      email,
-      passwordHash,
-      role: Role.STAFF,
-      status: UserStatus.PENDING_APPROVAL,
-      mustChangePassword: false,
-    },
-  });
-
-  return {
-    success: true,
-    redirectTo: "/login?message=Account+created.+Please+wait+for+Owner+approval.",
-  };
 }
 
 export async function changePasswordAction(formData: FormData): Promise<AuthResponse> {
-  const session = await getSession();
-  if (!session) {
-    return { success: false, error: "Unauthorized session. Please log in again." };
-  }
-
-  const currentPassword = formData.get("currentPassword") as string;
-  const newPassword = formData.get("newPassword") as string;
-  const confirmPassword = formData.get("confirmPassword") as string;
-
-  // Verify current password if user is not in forced-first-login mode
-  const dbUser = await prisma.user.findUnique({ where: { id: session.id } });
-  if (!dbUser) {
-    return { success: false, error: "User record not found." };
-  }
-
-  // Enforce current password verification unless user is in forced-first-login bootstrap mode
-  if (!dbUser.mustChangePassword) {
-    if (!currentPassword) {
-      return { success: false, error: "Current password is required." };
+  try {
+    const session = await getSession();
+    if (!session) {
+      return { success: false, error: "Unauthorized session. Please log in again." };
     }
-    const isCurrentValid = await bcrypt.compare(currentPassword, dbUser.passwordHash);
-    if (!isCurrentValid) {
-      return { success: false, error: "Current password does not match." };
+
+    const currentPassword = formData.get("currentPassword") as string;
+    const newPassword = formData.get("newPassword") as string;
+    const confirmPassword = formData.get("confirmPassword") as string;
+
+    // Verify current password if user is not in forced-first-login mode
+    const dbUser = await prisma.user.findUnique({ where: { id: session.id } });
+    if (!dbUser) {
+      return { success: false, error: "User record not found." };
     }
-  }
 
-  // Enforce password policy
-  const passwordValidation = validatePasswordStrength(newPassword);
-  if (!passwordValidation.valid) {
-    return { success: false, error: passwordValidation.reason };
-  }
+    // Enforce current password verification unless user is in forced-first-login bootstrap mode
+    if (!dbUser.mustChangePassword) {
+      if (!currentPassword) {
+        return { success: false, error: "Current password is required." };
+      }
+      const isCurrentValid = await bcrypt.compare(currentPassword, dbUser.passwordHash);
+      if (!isCurrentValid) {
+        return { success: false, error: "Current password does not match." };
+      }
+    }
 
-  if (newPassword !== confirmPassword) {
-    return { success: false, error: "New passwords do not match." };
-  }
+    // Enforce password policy
+    const passwordValidation = validatePasswordStrength(newPassword);
+    if (!passwordValidation.valid) {
+      return { success: false, error: passwordValidation.reason };
+    }
 
-  const passwordHash = await bcrypt.hash(newPassword, 12);
+    if (newPassword !== confirmPassword) {
+      return { success: false, error: "New passwords do not match." };
+    }
 
-  await prisma.user.update({
-    where: { id: session.id },
-    data: {
-      passwordHash,
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+
+    await prisma.user.update({
+      where: { id: session.id },
+      data: {
+        passwordHash,
+        mustChangePassword: false,
+      },
+    });
+
+    // Re-issue session cookie with mustChangePassword = false
+    const { createSessionToken } = await import("@/lib/auth/session");
+    const token = await createSessionToken({
+      id: session.id,
+      email: session.email,
+      name: session.name,
+      role: session.role,
       mustChangePassword: false,
-    },
-  });
+    });
+    await setSessionCookie(token);
 
-  // Re-issue session cookie with mustChangePassword = false
-  const { createSessionToken } = await import("@/lib/auth/session");
-  const token = await createSessionToken({
-    id: session.id,
-    email: session.email,
-    name: session.name,
-    role: session.role,
-    mustChangePassword: false,
-  });
-  await setSessionCookie(token);
+    await logAudit({
+      userId: session.id,
+      action: AuditAction.UPDATE_RECORD,
+      entityType: "User",
+      entityId: session.id,
+      details: "User updated password and completed security validation.",
+    });
 
-  await logAudit({
-    userId: session.id,
-    action: AuditAction.UPDATE_RECORD,
-    entityType: "User",
-    entityId: session.id,
-    details: "User updated password and completed security validation.",
-  });
-
-  return { success: true, redirectTo: "/" };
+    return { success: true, redirectTo: "/" };
+  } catch (err: any) {
+    console.error("[AUTH ERROR] changePasswordAction:", err);
+    return { success: false, error: formatDbError(err) };
+  }
 }
 
 export async function logoutAction(): Promise<void> {
