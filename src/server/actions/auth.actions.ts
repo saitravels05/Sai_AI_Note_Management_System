@@ -27,6 +27,9 @@ function formatDbError(err: any): string {
   ) {
     return "Cannot connect to the database server. Please ensure PostgreSQL is running (run 'npm run db:start').";
   }
+  if (msg.includes("does not exist in the current database")) {
+    return "Database table missing. Please run 'npm run db:push' to sync your database schema.";
+  }
   return err?.message || "An unexpected error occurred during authentication.";
 }
 

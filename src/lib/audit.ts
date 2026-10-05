@@ -25,7 +25,7 @@ export async function logAudit({
   try {
     await prisma.auditLog.create({
       data: {
-        userId: userId || null,
+        userId: userId && userId !== "anonymous" ? userId : null,
         action,
         entityType,
         entityId,
