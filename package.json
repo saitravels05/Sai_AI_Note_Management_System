@@ -22,7 +22,8 @@
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
-    "bootstrap:owner": "tsx scripts/bootstrap-owner.ts"
+    "bootstrap:owner": "tsx scripts/bootstrap-owner.ts",
+    "test:security": "tsx --test tests/security/*.test.ts"
   },
   "dependencies": {
     "@google/genai": "^2.27.0",
