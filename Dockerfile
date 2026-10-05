@@ -66,5 +66,15 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD curl -f http://localhost:3000/api/health || exit 1
 
-# Start the application
+# npm is only needed while building the image. The production process starts
+# Next.js directly, so remove the bundled npm CLI and its dependency tree from
+# the runtime image to keep the attack surface minimal.
+USER root
+RUN rm -rf /usr/local/lib/node_modules/npm \
+    /usr/local/bin/npm \
+    /usr/local/bin/npx && \
+    chown -R nextjs:nodejs /app
+USER nextjs
+
+# Start the application directly without npm
 CMD ["node", "node_modules/next/dist/bin/next", "start"]
