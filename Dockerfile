@@ -4,7 +4,7 @@
 # ==============================================================================
 
 # Stage 1: Dependencies Cache
-FROM node:20-alpine AS deps
+FROM node:24-alpine AS deps
 RUN apk add --no-cache libc6-compat openssl
 WORKDIR /app
 
@@ -14,7 +14,7 @@ COPY prisma ./prisma/
 RUN npm ci
 
 # Stage 2: Application Builder
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 RUN apk add --no-cache openssl
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
@@ -28,8 +28,11 @@ ENV NODE_ENV=production
 RUN npx prisma generate
 RUN npm run build
 
+# Remove build/test tooling from the production dependency tree
+RUN npm prune --omit=dev
+
 # Stage 3: Minimal Production Runner (Least Privilege)
-FROM node:20-alpine AS runner
+FROM node:24-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
@@ -64,4 +67,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD curl -f http://localhost:3000/api/health || exit 1
 
 # Start the application
-CMD ["npm", "start"]
+CMD ["node", "node_modules/next/dist/bin/next", "start"]
