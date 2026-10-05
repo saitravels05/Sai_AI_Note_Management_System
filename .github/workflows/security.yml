@@ -85,6 +85,7 @@ jobs:
           --health-retries 5
     env:
       DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/sai_books_test?schema=public"
+      DIRECT_URL: "postgresql://postgres:postgres@localhost:5432/sai_books_test?schema=public"
       JWT_SECRET: "test-secret-at-least-32-characters-long-for-testing-only"
       ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
       NODE_ENV: "test"
