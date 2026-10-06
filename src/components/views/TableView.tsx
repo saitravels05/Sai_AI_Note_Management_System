@@ -52,7 +52,9 @@ export function TableView({ records, lang }: TableViewProps) {
               <th className="py-3 px-4">Category</th>
               <th className="py-3 px-4">Type</th>
               <th className="py-3 px-4">Payment</th>
-              <th className="py-3 px-4 text-right">Amount (₹)</th>
+              <th className="py-3 px-4 text-right">Customer (₹)</th>
+              <th className="py-3 px-4 text-right">Agent Cost (₹)</th>
+              <th className="py-3 px-4 text-right">Profit / Charge (₹)</th>
               <th className="py-3 px-4 text-right">Due (₹)</th>
             </tr>
           </thead>
@@ -64,6 +66,11 @@ export function TableView({ records, lang }: TableViewProps) {
                 year: "numeric",
               });
               const isExpense = r.type === RecordType.EXPENSE || r.type === RecordType.PAYABLE;
+              const profitVal = r.serviceCharge !== undefined && r.serviceCharge !== null
+                ? Money.from(r.serviceCharge)
+                : r.customerAmount && r.agentAmount
+                ? Money.from(r.customerAmount).sub(r.agentAmount)
+                : null;
 
               return (
                 <tr key={r.id} className="hover:bg-gray-50/60 dark:hover:bg-gray-700/30 transition-colors">
@@ -100,7 +107,27 @@ export function TableView({ records, lang }: TableViewProps) {
                     }`}
                   >
                     {isExpense ? "-" : "+"}
-                    {Money.from(r.amount).formatIndian(true)}
+                    {Money.from(r.customerAmount || r.amount).formatIndian(true)}
+                  </td>
+                  <td className="py-3 px-4 text-right text-gray-600 dark:text-gray-400">
+                    {r.agentAmount && Money.from(r.agentAmount).isPositive()
+                      ? Money.from(r.agentAmount).formatIndian(true)
+                      : "—"}
+                  </td>
+                  <td className="py-3 px-4 text-right font-semibold">
+                    {profitVal ? (
+                      <span
+                        className={
+                          profitVal.isNegative()
+                            ? "text-rose-600 dark:text-rose-400"
+                            : "text-emerald-600 dark:text-emerald-400 font-bold"
+                        }
+                      >
+                        {profitVal.formatIndian(true)}
+                      </span>
+                    ) : (
+                      "—"
+                    )}
                   </td>
                   <td className="py-3 px-4 text-right font-semibold text-amber-600 dark:text-amber-400">
                     {Money.from(r.balanceDue).isPositive()

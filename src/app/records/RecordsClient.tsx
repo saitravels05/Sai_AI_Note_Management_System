@@ -96,11 +96,14 @@ export function RecordsClient({ initialRecords }: RecordsClientProps) {
           <option value="ALL">All Categories</option>
           <option value="TOUR_PACKAGE">Tour Packages</option>
           <option value="FLIGHT_TICKET">Flight Tickets</option>
+          <option value="TRAIN_TICKET">Train Tickets</option>
+          <option value="BUS_TICKET">Bus Tickets</option>
           <option value="HOTEL_BOOKING">Hotel Bookings</option>
           <option value="PASSPORT_SERVICE">Passport Services</option>
           <option value="VISA_SERVICE">Visa Services</option>
           <option value="VEHICLE_RENTAL">Vehicle Rentals</option>
           <option value="OFFICE_EXPENSE">Office Expenses</option>
+          <option value="OTHER">Other</option>
         </select>
 
         {/* Type Filter */}
@@ -134,6 +137,9 @@ export function RecordsClient({ initialRecords }: RecordsClientProps) {
               type={r.type}
               category={r.category}
               amount={r.amount}
+              customerAmount={r.customerAmount}
+              agentAmount={r.agentAmount}
+              serviceCharge={r.serviceCharge}
               amountPaid={r.amountPaid}
               balanceDue={r.balanceDue}
               paymentMode={r.paymentMode}

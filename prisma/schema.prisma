@@ -31,6 +31,7 @@ enum RecordType {
 
 enum ServiceCategory {
   FLIGHT_TICKET
+  TRAIN_TICKET
   BUS_TICKET
   HOTEL_BOOKING
   TOUR_PACKAGE
@@ -234,6 +235,9 @@ model NoteRecord {
   type              RecordType
   category          ServiceCategory @default(OTHER)
   amount            Decimal         @db.Decimal(15, 2)
+  customerAmount    Decimal?        @db.Decimal(15, 2)
+  agentAmount       Decimal?        @db.Decimal(15, 2)
+  serviceCharge     Decimal?        @db.Decimal(15, 2)
   amountPaid        Decimal         @default(0.00) @db.Decimal(15, 2)
   balanceDue        Decimal         @default(0.00) @db.Decimal(15, 2)
   paymentMode       PaymentMode     @default(CASH)

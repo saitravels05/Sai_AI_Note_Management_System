@@ -49,3 +49,14 @@ test("AI Quick-Add: Decimal Paise and Fractional K Parsing", async () => {
   assert.strictEqual(kResult.paymentMode, PaymentMode.UPI);
 });
 
+test("AI Quick-Add: Train Ticket Category & Customer/Agent Amount Parsing", async () => {
+  const sentence = "Train Ticket (Chennai - Ahmedabad) customer 13127.20 agent 12500 for Trichy Office by UPI";
+  const result = await parseQuickAddSentence(sentence);
+
+  assert.strictEqual(result.category, ServiceCategory.TRAIN_TICKET);
+  assert.strictEqual(result.customerAmount, 13127.2);
+  assert.strictEqual(result.agentAmount, 12500);
+  assert.strictEqual(Number((result.serviceCharge || 0).toFixed(2)), 627.2);
+  assert.strictEqual(result.paymentMode, PaymentMode.UPI);
+});
+

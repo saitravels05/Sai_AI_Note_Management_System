@@ -4,6 +4,9 @@ import { RecordType, ServiceCategory, PaymentMode } from "@prisma/client";
 export interface ParsedNoteCard {
   title: string;
   amount: number;
+  customerAmount?: number;
+  agentAmount?: number;
+  serviceCharge?: number;
   type: RecordType;
   category: ServiceCategory;
   paymentMode: PaymentMode;
@@ -28,9 +31,11 @@ Analyze the following sentence written in English, Tamil, or Tanglish:
 
 Extract and return a JSON object with:
 - title: concise title for the record (e.g., "Kumar - Chennai flight ticket")
-- amount: numerical value in INR (e.g. 5000)
+- amount: total or customer numerical value in INR (e.g. 5000)
+- customerAmount: amount charged to customer if specified (or same as amount)
+- agentAmount: cost paid to agent/supplier if specified (or 0)
 - type: one of "INCOME", "EXPENSE", "RECEIVABLE", "PAYABLE"
-- category: one of "FLIGHT_TICKET", "BUS_TICKET", "HOTEL_BOOKING", "TOUR_PACKAGE", "PASSPORT_SERVICE", "VISA_SERVICE", "VEHICLE_RENTAL", "OFFICE_EXPENSE", "COMMISSION", "OTHER"
+- category: one of "FLIGHT_TICKET", "TRAIN_TICKET", "BUS_TICKET", "HOTEL_BOOKING", "TOUR_PACKAGE", "PASSPORT_SERVICE", "VISA_SERVICE", "VEHICLE_RENTAL", "OFFICE_EXPENSE", "COMMISSION", "OTHER"
 - paymentMode: one of "CASH", "UPI", "BANK_TRANSFER", "CARD", "CREDIT_UNPAID"
 - partyName: name of customer or vendor mentioned
 - confidence: number between 0.50 and 0.99
@@ -48,9 +53,17 @@ Respond ONLY with valid JSON.`;
       const responseText = response.text || "{}";
       const parsed = JSON.parse(responseText);
 
+      const parsedAmt = Number(parsed.amount) || 0;
+      const custAmt = Number(parsed.customerAmount) || parsedAmt;
+      const agtAmt = Number(parsed.agentAmount) || 0;
+      const sCharge = custAmt - agtAmt;
+
       return {
         title: parsed.title || text.slice(0, 50),
-        amount: Number(parsed.amount) || 0,
+        amount: custAmt || parsedAmt,
+        customerAmount: custAmt,
+        agentAmount: agtAmt,
+        serviceCharge: sCharge,
         type: parsed.type in RecordType ? (parsed.type as RecordType) : RecordType.INCOME,
         category: parsed.category in ServiceCategory ? (parsed.category as ServiceCategory) : ServiceCategory.OTHER,
         paymentMode: parsed.paymentMode in PaymentMode ? (parsed.paymentMode as PaymentMode) : PaymentMode.CASH,
@@ -115,6 +128,8 @@ function parseWithLocalHeuristics(text: string): ParsedNoteCard {
   let category: ServiceCategory = ServiceCategory.OTHER;
   if (lower.includes("flight") || lower.includes("air") || lower.includes("plane") || lower.includes("விமானம்")) {
     category = ServiceCategory.FLIGHT_TICKET;
+  } else if (lower.includes("train") || lower.includes("railway") || lower.includes("irctc") || lower.includes("ரயில்")) {
+    category = ServiceCategory.TRAIN_TICKET;
   } else if (lower.includes("bus") || lower.includes("பேருந்து")) {
     category = ServiceCategory.BUS_TICKET;
   } else if (lower.includes("hotel") || lower.includes("room") || lower.includes("ஹோட்டல்")) {
@@ -150,9 +165,25 @@ function parseWithLocalHeuristics(text: string): ParsedNoteCard {
     partyName = fromMatch[1];
   }
 
+  // 6. Explicit Customer vs Agent Amount parsing if present
+  let customerAmount = amount;
+  let agentAmount = 0;
+  const custMatch = text.match(/(?:cust(?:omer)?(?:\s*amt|\s*amount)?)\s*(?:₹|rs\.?|inr)?\s*(\d[\d,]*(?:\.\d{1,2})?)/i);
+  const agentMatch = text.match(/(?:agent(?:\s*amt|\s*amount|\s*cost)?)\s*(?:₹|rs\.?|inr)?\s*(\d[\d,]*(?:\.\d{1,2})?)/i);
+  if (custMatch) {
+    customerAmount = parseFloat(custMatch[1].replace(/,/g, "")) || customerAmount;
+  }
+  if (agentMatch) {
+    agentAmount = parseFloat(agentMatch[1].replace(/,/g, "")) || 0;
+  }
+  const serviceCharge = customerAmount - agentAmount;
+
   return {
     title: text.length > 50 ? `${text.slice(0, 47)}...` : text,
-    amount,
+    amount: customerAmount || amount,
+    customerAmount: customerAmount || amount,
+    agentAmount,
+    serviceCharge,
     type,
     category,
     paymentMode,

@@ -26,6 +26,9 @@ export interface NoteCardProps {
   type: RecordType;
   category: ServiceCategory;
   amount: string | number;
+  customerAmount?: string | number | null;
+  agentAmount?: string | number | null;
+  serviceCharge?: string | number | null;
   amountPaid: string | number;
   balanceDue: string | number;
   paymentMode: PaymentMode;
@@ -47,6 +50,9 @@ export function NoteCard({
   type,
   category,
   amount,
+  customerAmount,
+  agentAmount,
+  serviceCharge,
   amountPaid,
   balanceDue,
   paymentMode,
@@ -159,6 +165,37 @@ export function NoteCard({
           {formattedAmount}
         </span>
       </div>
+
+      {/* Customer Amount, Agent Amount & Service Charge (Profit) Breakdown */}
+      {((serviceCharge !== undefined && serviceCharge !== null && Money.from(serviceCharge).isNonZero()) ||
+        (agentAmount !== undefined && agentAmount !== null && Money.from(agentAmount).isPositive())) && (
+        <div className="flex items-center justify-between text-[11px] bg-slate-50 dark:bg-slate-900/60 px-2.5 py-1.5 rounded-lg border border-slate-100 dark:border-slate-800/80 mb-2.5">
+          <div className="text-slate-600 dark:text-slate-400 flex items-center gap-1.5 font-medium">
+            <span>
+              Cust: <strong className="text-slate-800 dark:text-slate-200">{Money.from(customerAmount || amount).formatIndian(true)}</strong>
+            </span>
+            {agentAmount && Money.from(agentAmount).isPositive() && (
+              <>
+                <span className="text-slate-300 dark:text-slate-700">•</span>
+                <span>
+                  Agent: <strong className="text-slate-800 dark:text-slate-200">{Money.from(agentAmount).formatIndian(true)}</strong>
+                </span>
+              </>
+            )}
+          </div>
+          {serviceCharge !== undefined && serviceCharge !== null && (
+            <span
+              className={`font-bold px-1.5 py-0.5 rounded ${
+                Money.from(serviceCharge).isNegative()
+                  ? "text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40"
+                  : "text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40"
+              }`}
+            >
+              Profit: {Money.from(serviceCharge).formatIndian(true)}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Optional Free-text Notes */}
       {notes && (

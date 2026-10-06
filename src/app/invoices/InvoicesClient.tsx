@@ -257,6 +257,7 @@ export function InvoicesClient({ initialInvoices }: InvoicesClientProps) {
                   >
                     <option value={ServiceCategory.TOUR_PACKAGE}>Tour Package</option>
                     <option value={ServiceCategory.FLIGHT_TICKET}>Flight Ticket</option>
+                    <option value={ServiceCategory.TRAIN_TICKET}>Train Ticket</option>
                     <option value={ServiceCategory.HOTEL_BOOKING}>Hotel Booking</option>
                     <option value={ServiceCategory.PASSPORT_SERVICE}>Passport Service</option>
                     <option value={ServiceCategory.VISA_SERVICE}>Visa Service</option>

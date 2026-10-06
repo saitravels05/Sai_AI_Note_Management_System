@@ -106,3 +106,22 @@ test("Accounting Engine: Indian Calendar & Date Boundaries (IST)", () => {
   const novDate = parseFlexibleDate("05/11/2026");
   assert.strictEqual(formatDateIndian(novDate!), "05/11/2026");
 });
+
+test("Accounting Engine: Train Ticket Journal Entry, Customer Amount, Agent Amount & Service Charge (Profit)", () => {
+  // Scenario from User Screenshot: Train Ticket (Chennai - Ahmedabad)
+  // Customer Amount = ₹13,127.20
+  // Agent Amount = ₹12,500.00
+  // Service Charge (Profit) = Customer Amount - Agent Amount = ₹627.20
+  const customerAmount = Money.from("13127.20");
+  const agentAmount = Money.from("12500.00");
+  const serviceCharge = customerAmount.sub(agentAmount);
+
+  assert.strictEqual(serviceCharge.toFixed(2), "627.20");
+  assert.strictEqual(serviceCharge.formatIndian(true, true), "₹627.20");
+  assert.strictEqual(serviceCharge.isPositive(), true);
+
+  // Profit Margin percentage
+  const profitMarginPercent = serviceCharge.div(customerAmount).mul(100);
+  assert.strictEqual(profitMarginPercent.toFixed(2), "4.78"); // 4.78% margin on train ticket booking
+});
+

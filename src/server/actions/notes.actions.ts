@@ -13,7 +13,10 @@ export interface NoteCardInput {
   notes?: string;
   type: RecordType;
   category: ServiceCategory;
-  amount: number | string;
+  amount?: number | string;
+  customerAmount?: number | string;
+  agentAmount?: number | string;
+  serviceCharge?: number | string;
   amountPaid?: number | string;
   paymentMode: PaymentMode;
   date?: string;
@@ -49,13 +52,43 @@ export async function createNoteCardAction(input: NoteCardInput) {
     throw new Error("Card title / description is required.");
   }
 
-  const moneyObj = Money.from(input.amount);
-  if (!moneyObj.isPositive()) {
-    throw new Error("Amount must be a valid positive number.");
+  const custMoney =
+    input.customerAmount !== undefined && input.customerAmount !== ""
+      ? Money.from(input.customerAmount)
+      : input.amount !== undefined && input.amount !== ""
+      ? Money.from(input.amount)
+      : Money.zero();
+
+  const agentMoney =
+    input.agentAmount !== undefined && input.agentAmount !== ""
+      ? Money.from(input.agentAmount)
+      : Money.zero();
+
+  const serviceChargeMoney =
+    input.serviceCharge !== undefined && input.serviceCharge !== ""
+      ? Money.from(input.serviceCharge)
+      : custMoney.sub(agentMoney);
+
+  const primaryMoney = custMoney.isPositive()
+    ? custMoney
+    : agentMoney.isPositive()
+    ? agentMoney
+    : Money.from(input.amount || 0);
+
+  if (!primaryMoney.isPositive()) {
+    throw new Error("Customer amount must be a valid positive number.");
   }
 
-  const amountDecimal = moneyObj.toDecimal();
-  const amountPaidDecimal = Money.from(input.amountPaid ?? (input.paymentMode === PaymentMode.CREDIT_UNPAID ? 0 : input.amount)).toDecimal();
+  const amountDecimal = primaryMoney.toDecimal();
+  const customerAmountDecimal = custMoney.isPositive() ? custMoney.toDecimal() : amountDecimal;
+  const agentAmountDecimal =
+    agentMoney.isPositive() || (input.agentAmount !== undefined && input.agentAmount !== "")
+      ? agentMoney.toDecimal()
+      : null;
+  const serviceChargeDecimal = serviceChargeMoney.toDecimal();
+
+  const defaultPaid = input.paymentMode === PaymentMode.CREDIT_UNPAID ? 0 : amountDecimal;
+  const amountPaidDecimal = Money.from(input.amountPaid ?? defaultPaid).toDecimal();
   const balanceDueDecimal = Money.from(amountDecimal).sub(amountPaidDecimal).toDecimal();
 
   let paymentStatus: PaymentStatus = PaymentStatus.COMPLETED;
@@ -116,6 +149,10 @@ export async function createNoteCardAction(input: NoteCardInput) {
       type: input.type,
       category: input.category,
       amount: amountDecimal,
+      customerAmount: customerAmountDecimal,
+      agentAmount: agentAmountDecimal,
+      serviceCharge: serviceChargeDecimal,
+      commissionAmount: serviceChargeDecimal,
       amountPaid: amountPaidDecimal,
       balanceDue: balanceDueDecimal,
       paymentMode: input.paymentMode,
@@ -136,7 +173,7 @@ export async function createNoteCardAction(input: NoteCardInput) {
     action: AuditAction.CREATE_RECORD,
     entityType: "NoteRecord",
     entityId: record.id,
-    details: `Created Note Card #${recordNumber} (${input.title}) for ₹${amountDecimal.toString()}`,
+    details: `Created Note Card #${recordNumber} (${input.title}) - Customer: ₹${amountDecimal.toString()}, Agent: ₹${agentMoney.toString()}, Profit: ₹${serviceChargeDecimal.toString()}`,
   });
 
   revalidatePath("/");

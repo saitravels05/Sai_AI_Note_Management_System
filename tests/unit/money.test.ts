@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert";
-import { Money, calculateGst, calculateNetProfit } from "../../src/lib/money";
+import { Money, calculateGst, calculateNetProfit, calculateServiceCharge } from "../../src/lib/money";
 
 test("Money Math: Exact Decimal Precision without Floating Point Loss", () => {
   const a = Money.from("0.1");
@@ -39,6 +39,16 @@ test("Money Math: Net Profit Calculation", () => {
 
   assert.strictEqual(net.formatIndian(true), "₹33,000");
   assert.strictEqual(net.isPositive(), true);
+});
+
+test("Money Math: Service Charge (Profit) Calculation", () => {
+  const customerAmount = Money.from("13127.20");
+  const agentAmount = Money.from("12500.00");
+  const serviceCharge = calculateServiceCharge(customerAmount, agentAmount);
+
+  assert.strictEqual(serviceCharge.toFixed(2), "627.20");
+  assert.strictEqual(serviceCharge.formatIndian(true, true), "₹627.20");
+  assert.strictEqual(serviceCharge.isPositive(), true);
 });
 
 test("Money Robustness: Parsing Currency Strings with Symbols and Suffixes", () => {

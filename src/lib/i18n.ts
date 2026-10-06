@@ -23,6 +23,7 @@ export const translations = {
     },
     categories: {
       FLIGHT_TICKET: "Flight Ticket",
+      TRAIN_TICKET: "Train Ticket",
       BUS_TICKET: "Bus Ticket",
       HOTEL_BOOKING: "Hotel Booking",
       TOUR_PACKAGE: "Tour Package",
@@ -33,6 +34,9 @@ export const translations = {
       COMMISSION: "Commission",
       OTHER: "Other",
     },
+    customerAmount: "Customer Amount",
+    agentAmount: "Agent Amount",
+    serviceCharge: "Service Charge / Profit",
     paymentModes: {
       CASH: "Cash",
       UPI: "UPI (GPay / PhonePe)",
@@ -81,6 +85,7 @@ export const translations = {
     },
     categories: {
       FLIGHT_TICKET: "விமான டிக்கெட்",
+      TRAIN_TICKET: "ரயில் டிக்கெட்",
       BUS_TICKET: "பேருந்து டிக்கெட்",
       HOTEL_BOOKING: "ஹோட்டல் முன்பதிவு",
       TOUR_PACKAGE: "சுற்றுலா பேக்கேஜ்",
@@ -91,6 +96,9 @@ export const translations = {
       COMMISSION: "கம்மிஷன்",
       OTHER: "மற்றவை",
     },
+    customerAmount: "வாடிக்கையாளர் தொகை",
+    agentAmount: "ஏஜென்ட் தொகை",
+    serviceCharge: "சேவைக் கட்டணம் / லாபம்",
     paymentModes: {
       CASH: "ரொக்கம் (Cash)",
       UPI: "UPI (GPay / PhonePe)",

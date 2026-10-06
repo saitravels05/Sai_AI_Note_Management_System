@@ -379,6 +379,7 @@ export function SuppliersClient({ user, initialSuppliers }: SuppliersClientProps
                       className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-1 focus:ring-orange-500 font-semibold"
                     >
                       <option value={ServiceCategory.FLIGHT_TICKET}>Flight Ticket</option>
+                      <option value={ServiceCategory.TRAIN_TICKET}>Train Ticket</option>
                       <option value={ServiceCategory.BUS_TICKET}>Bus Ticket</option>
                       <option value={ServiceCategory.HOTEL_BOOKING}>Hotel Booking</option>
                       <option value={ServiceCategory.VEHICLE_RENTAL}>Vehicle Rental</option>

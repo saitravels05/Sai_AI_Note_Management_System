@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { translations, Language } from "@/lib/i18n";
 import { parseSentenceAction, createNoteCardAction } from "@/server/actions/notes.actions";
 import { RecordType, ServiceCategory, PaymentMode } from "@prisma/client";
-import { Sparkles, ArrowRight, Check, X, Loader2, PlusCircle } from "lucide-react";
+import { Sparkles, Check, X, Loader2, PlusCircle, TrendingUp, Calculator } from "lucide-react";
 
 interface QuickAddBarProps {
   lang: Language;
@@ -20,13 +20,22 @@ export function QuickAddBar({ lang, onRecordCreated }: QuickAddBarProps) {
 
   // Form Fields
   const [title, setTitle] = useState("");
-  const [amount, setAmount] = useState("");
+  const [customerAmount, setCustomerAmount] = useState("");
+  const [agentAmount, setAgentAmount] = useState("");
   const [type, setType] = useState<RecordType>(RecordType.INCOME);
   const [category, setCategory] = useState<ServiceCategory>(ServiceCategory.OTHER);
   const [paymentMode, setPaymentMode] = useState<PaymentMode>(PaymentMode.CASH);
   const [partyName, setPartyName] = useState("");
   const [notes, setNotes] = useState("");
   const [confidence, setConfidence] = useState<number | null>(null);
+
+  // Auto-calculated Service Charge (Profit) = Customer Amount - Agent Amount
+  const serviceChargeValue = useMemo(() => {
+    if (!customerAmount && !agentAmount) return "";
+    const c = parseFloat(customerAmount) || 0;
+    const a = parseFloat(agentAmount) || 0;
+    return (c - a).toFixed(2);
+  }, [customerAmount, agentAmount]);
 
   const handleParse = async (inputStr?: string) => {
     const textToParse = inputStr || sentence;
@@ -36,7 +45,18 @@ export function QuickAddBar({ lang, onRecordCreated }: QuickAddBarProps) {
     try {
       const parsed = await parseSentenceAction(textToParse);
       setTitle(parsed.title);
-      setAmount(parsed.amount > 0 ? String(parsed.amount) : "");
+      setCustomerAmount(
+        parsed.customerAmount !== undefined && parsed.customerAmount > 0
+          ? String(parsed.customerAmount)
+          : parsed.amount > 0
+          ? String(parsed.amount)
+          : ""
+      );
+      setAgentAmount(
+        parsed.agentAmount !== undefined && parsed.agentAmount > 0
+          ? String(parsed.agentAmount)
+          : ""
+      );
       setType(parsed.type);
       setCategory(parsed.category);
       setPaymentMode(parsed.paymentMode);
@@ -53,13 +73,16 @@ export function QuickAddBar({ lang, onRecordCreated }: QuickAddBarProps) {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !amount) return;
+    if (!title || (!customerAmount && !agentAmount)) return;
 
     setIsSaving(true);
     try {
       await createNoteCardAction({
         title,
-        amount,
+        customerAmount,
+        agentAmount: agentAmount || "0",
+        serviceCharge: serviceChargeValue,
+        amount: customerAmount || agentAmount,
         type,
         category,
         paymentMode,
@@ -70,7 +93,8 @@ export function QuickAddBar({ lang, onRecordCreated }: QuickAddBarProps) {
       // Reset
       setSentence("");
       setTitle("");
-      setAmount("");
+      setCustomerAmount("");
+      setAgentAmount("");
       setPartyName("");
       setNotes("");
       setIsExpanded(false);
@@ -115,10 +139,20 @@ export function QuickAddBar({ lang, onRecordCreated }: QuickAddBarProps) {
         </button>
       </div>
 
-      {/* Suggested Sentences for Beginners */}
+      {/* Suggested Sentences */}
       {!isExpanded && (
         <div className="mt-3 flex items-center gap-2 overflow-x-auto text-xs text-gray-500 dark:text-gray-400">
           <span className="font-semibold shrink-0">Try typing:</span>
+          <button
+            onClick={() => {
+              const text = "Train Ticket (Chennai - Ahmedabad) customer 13127.20 agent 12500 Trichy Office by UPI";
+              setSentence(text);
+              handleParse(text);
+            }}
+            className="px-2.5 py-1 rounded-full bg-orange-50 hover:bg-orange-100 dark:bg-orange-950/40 dark:hover:bg-orange-900/60 text-orange-700 dark:text-orange-300 shrink-0 cursor-pointer font-medium border border-orange-200 dark:border-orange-800"
+          >
+            &quot;Train Ticket Chennai to Ahmedabad cust 13127.20 agent 12500 by UPI&quot;
+          </button>
           <button
             onClick={() => {
               setSentence("Received 5000 from Kumar for Chennai flight ticket via UPI");
@@ -169,24 +203,8 @@ export function QuickAddBar({ lang, onRecordCreated }: QuickAddBarProps) {
               required
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Ramesh – Goa package – advance"
+              placeholder="e.g. Train Ticket (Chennai - Ahmedabad)"
               className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-orange-500"
-            />
-          </div>
-
-          {/* Amount */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">
-              Amount (₹) *
-            </label>
-            <input
-              type="number"
-              step="any"
-              required
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="e.g. 5000"
-              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-semibold focus:ring-2 focus:ring-orange-500"
             />
           </div>
 
@@ -225,6 +243,63 @@ export function QuickAddBar({ lang, onRecordCreated }: QuickAddBarProps) {
             </select>
           </div>
 
+          {/* Customer Amount */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">
+              Customer Amount (₹) *
+            </label>
+            <input
+              type="number"
+              step="any"
+              required
+              value={customerAmount}
+              onChange={(e) => setCustomerAmount(e.target.value)}
+              placeholder="e.g. 13127.20"
+              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-semibold focus:ring-2 focus:ring-orange-500"
+            />
+          </div>
+
+          {/* Agent Amount */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">
+              Agent Amount (₹)
+            </label>
+            <input
+              type="number"
+              step="any"
+              value={agentAmount}
+              onChange={(e) => setAgentAmount(e.target.value)}
+              placeholder="e.g. 12500.00"
+              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-semibold focus:ring-2 focus:ring-orange-500"
+            />
+          </div>
+
+          {/* Service Charge (Profit) - Auto calculated */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400">
+                Service Charge / Profit (₹)
+              </label>
+              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-0.5">
+                <Calculator className="w-3 h-3" /> Auto
+              </span>
+            </div>
+            <div className="relative">
+              <input
+                type="text"
+                readOnly
+                value={serviceChargeValue ? `₹${serviceChargeValue}` : "₹0.00"}
+                className={`w-full px-3 py-2 border rounded-lg text-sm font-bold cursor-default select-none transition-all ${
+                  parseFloat(serviceChargeValue) > 0
+                    ? "border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40"
+                    : parseFloat(serviceChargeValue) < 0
+                    ? "border-rose-300 dark:border-rose-700 text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40"
+                    : "border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-900"
+                }`}
+              />
+            </div>
+          </div>
+
           {/* Payment Mode */}
           <div>
             <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">
@@ -252,10 +327,31 @@ export function QuickAddBar({ lang, onRecordCreated }: QuickAddBarProps) {
               type="text"
               value={partyName}
               onChange={(e) => setPartyName(e.target.value)}
-              placeholder="e.g. Kumar / Air India"
+              placeholder="e.g. Trichy Office"
               className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-orange-500"
             />
           </div>
+
+          {/* Real-time Profit Formula Pill */}
+          {customerAmount && (
+            <div className="col-span-full flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-orange-50/70 dark:bg-orange-950/20 border border-orange-200/80 dark:border-orange-900/40 text-xs">
+              <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                <span className="font-semibold text-orange-700 dark:text-orange-400 flex items-center gap-1">
+                  <TrendingUp className="w-3.5 h-3.5" /> Calculation:
+                </span>
+                <span>Customer (₹{customerAmount})</span>
+                <span>−</span>
+                <span>Agent ({agentAmount ? `₹${agentAmount}` : "₹0.00"})</span>
+                <span>=</span>
+                <span className="font-bold text-emerald-700 dark:text-emerald-400">
+                  ₹{serviceChargeValue || "0.00"} Service Charge (Profit)
+                </span>
+              </div>
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300">
+                {parseFloat(serviceChargeValue) >= 0 ? "Profit" : "Loss"}
+              </span>
+            </div>
+          )}
 
           {/* Submit Action */}
           <div className="col-span-full flex justify-end gap-2 mt-2">

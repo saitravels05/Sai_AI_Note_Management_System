@@ -63,18 +63,22 @@ export class Money {
     return new Money(this.value.minus(new Money(other).value));
   }
 
-  mul(factor: number | string | Decimal): Money {
-    return new Money(this.value.times(new Decimal(factor)));
+  mul(factor: MoneyInput): Money {
+    return new Money(this.value.times(new Money(factor).value));
   }
 
-  div(divisor: number | string | Decimal): Money {
-    const d = new Decimal(divisor);
+  div(divisor: MoneyInput): Money {
+    const d = new Money(divisor).value;
     if (d.isZero()) return new Money(0);
     return new Money(this.value.dividedBy(d));
   }
 
   isZero(): boolean {
     return this.value.isZero();
+  }
+
+  isNonZero(): boolean {
+    return !this.value.isZero();
   }
 
   isPositive(): boolean {
@@ -171,4 +175,11 @@ export function calculateGstInclusive(totalAmount: MoneyInput, ratePercentage: n
  */
 export function calculateNetProfit(totalInflow: MoneyInput, totalOutflow: MoneyInput): Money {
   return Money.from(totalInflow).sub(totalOutflow);
+}
+
+/**
+ * Calculate Service Charge (Profit) = Customer Amount - Agent Amount
+ */
+export function calculateServiceCharge(customerAmount: MoneyInput, agentAmount: MoneyInput): Money {
+  return Money.from(customerAmount).sub(agentAmount);
 }
