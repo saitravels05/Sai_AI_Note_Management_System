@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   getMonthAuditSummary,
   closeMonthAction,
@@ -38,7 +38,7 @@ export function MonthEndWizard({ lang, onClose, onRefresh }: MonthEndWizardProps
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
 
-  const fetchSummary = async () => {
+  const fetchSummary = useCallback(async () => {
     setIsLoading(true);
     try {
       const data = await getMonthAuditSummary(selectedYear, selectedMonth);
@@ -48,10 +48,20 @@ export function MonthEndWizard({ lang, onClose, onRefresh }: MonthEndWizardProps
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [selectedYear, selectedMonth]);
 
   useEffect(() => {
-    fetchSummary();
+    let isSubscribed = true;
+    getMonthAuditSummary(selectedYear, selectedMonth)
+      .then((data) => {
+        if (isSubscribed) setSummary(data);
+      })
+      .catch((err) => {
+        console.error(err);
+      });
+    return () => {
+      isSubscribed = false;
+    };
   }, [selectedYear, selectedMonth]);
 
   const handleCloseMonth = async () => {

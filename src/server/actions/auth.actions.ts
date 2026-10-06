@@ -16,21 +16,34 @@ export interface AuthResponse {
 }
 
 function formatDbError(err: any): string {
+  const isDev = process.env.NODE_ENV === "development";
   const msg = String(err?.message || "");
+
+  console.error("[AUTH DATABASE ERROR]", err);
+
   if (
     msg.includes("Can't reach database") ||
     msg.includes("ECONNREFUSED") ||
     msg.includes("PrismaClientInitializationError") ||
     msg.includes("connect ECONNREFUSED") ||
     msg.includes("ETIMEDOUT") ||
-    msg.includes("connection closed")
+    msg.includes("connection closed") ||
+    msg.includes("DATABASE_URL")
   ) {
-    return "Cannot connect to the database server. Please ensure PostgreSQL is running (run 'npm run db:start').";
+    return isDev
+      ? "Cannot connect to the database server. Please ensure PostgreSQL is running (run 'npm run db:start')."
+      : "Database service is temporarily unavailable. Please try again later or contact the administrator.";
   }
-  if (msg.includes("does not exist in the current database")) {
-    return "Database table missing. Please run 'npm run db:push' to sync your database schema.";
+
+  if (msg.includes("does not exist in the current database") || msg.includes("table")) {
+    return isDev
+      ? "Database table missing. Please run 'npm run db:push' to sync your database schema."
+      : "Database schema is currently updating. Please try again shortly or contact the administrator.";
   }
-  return err?.message || "An unexpected error occurred during authentication.";
+
+  return isDev
+    ? err?.message || "An unexpected error occurred during authentication."
+    : "An unexpected error occurred during authentication. Please try again.";
 }
 
 export async function loginAction(formData: FormData): Promise<AuthResponse> {

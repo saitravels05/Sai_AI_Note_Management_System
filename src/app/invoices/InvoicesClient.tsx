@@ -142,7 +142,7 @@ export function InvoicesClient({ initialInvoices }: InvoicesClientProps) {
               {filtered.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="py-12 text-center text-slate-400">
-                    No invoices issued yet. Click "New Tax Invoice / Voucher" to create your first invoice.
+                    No invoices issued yet. Click &quot;New Tax Invoice / Voucher&quot; to create your first invoice.
                   </td>
                 </tr>
               ) : (

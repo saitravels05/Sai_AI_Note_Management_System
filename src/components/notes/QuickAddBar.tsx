@@ -126,7 +126,7 @@ export function QuickAddBar({ lang, onRecordCreated }: QuickAddBarProps) {
             }}
             className="px-2.5 py-1 rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 shrink-0 cursor-pointer"
           >
-            "Received 5000 from Kumar for Chennai flight ticket by UPI"
+            &quot;Received 5000 from Kumar for Chennai flight ticket by UPI&quot;
           </button>
           <button
             onClick={() => {
@@ -135,7 +135,7 @@ export function QuickAddBar({ lang, onRecordCreated }: QuickAddBarProps) {
             }}
             className="px-2.5 py-1 rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 shrink-0 cursor-pointer"
           >
-            "Paid 3500 to Taj Hotel by Bank"
+            &quot;Paid 3500 to Taj Hotel by Bank&quot;
           </button>
         </div>
       )}

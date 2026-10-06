@@ -1,26 +1,40 @@
 import { PrismaClient } from "@prisma/client";
 
 declare global {
-  // eslint-disable-next-line no-var
   var globalPrisma: PrismaClient | undefined;
 }
 
 const DEFAULT_LOCAL_DB = "postgresql://postgres:postgres@localhost:5432/sai_books_db?schema=public";
-const databaseUrl = process.env.DATABASE_URL || DEFAULT_LOCAL_DB;
+
+function getDatabaseUrl(): string {
+  if (process.env.DATABASE_URL && process.env.DATABASE_URL.trim() !== "") {
+    return process.env.DATABASE_URL.trim();
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    console.error(
+      "[PRISMA FATAL CONFIG ERROR] DATABASE_URL is not configured in production environment variables. " +
+      "Configure a hosted PostgreSQL database (e.g. Neon, Supabase) in Vercel Project Settings."
+    );
+    throw new Error(
+      "Database connection string is not configured for production. Please configure DATABASE_URL in Vercel."
+    );
+  }
+
+  return DEFAULT_LOCAL_DB;
+}
 
 export const prisma =
-  global.globalPrisma ||
+  globalThis.globalPrisma ||
   new PrismaClient({
     datasources: {
       db: {
-        url: databaseUrl,
+        url: getDatabaseUrl(),
       },
     },
     log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
   });
 
-if (process.env.NODE_ENV !== "production") {
-  global.globalPrisma = prisma;
-}
+globalThis.globalPrisma = prisma;
 
 export default prisma;

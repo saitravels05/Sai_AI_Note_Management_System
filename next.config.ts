@@ -53,7 +53,7 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["pdfkit", "embedded-postgres"],
+  serverExternalPackages: ["pdfkit"],
   poweredByHeader: false, // Disables X-Powered-By: Next.js header (prevents server fingerprinting)
   async headers() {
     return [

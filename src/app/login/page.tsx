@@ -26,13 +26,16 @@ export default function LoginPage() {
       }
     } catch (err: any) {
       console.error("[LOGIN ERROR]", err);
+      const isDev = process.env.NODE_ENV === "development";
       const raw = String(err?.message || "");
-      if (raw.includes("441") || raw.includes("Minified React error") || raw.includes("Server Components")) {
+      if (raw.includes("441") || raw.includes("Minified React error") || raw.includes("Server Components") || raw.includes("database")) {
         setError(
-          "Database connection error: The server could not connect to PostgreSQL. Please ensure the database is running (run 'npm run db:start')."
+          isDev
+            ? "Database connection error: The server could not connect to PostgreSQL. Please ensure the database is running (run 'npm run db:start')."
+            : "Database service is temporarily unavailable. Please try again later or contact the administrator."
         );
       } else {
-        setError(err.message || "An unexpected error occurred. Please try again.");
+        setError(isDev ? (err.message || "An unexpected error occurred.") : "An unexpected error occurred. Please try again.");
       }
       setIsLoading(false);
     }
@@ -124,7 +127,7 @@ export default function LoginPage() {
           </form>
 
           <div className="mt-6 text-center text-xs text-gray-500">
-            Don't have an account?{" "}
+            Don&apos;t have an account?{" "}
             <Link href="/signup" className="font-semibold text-orange-600 hover:underline">
               Register Staff Account
             </Link>

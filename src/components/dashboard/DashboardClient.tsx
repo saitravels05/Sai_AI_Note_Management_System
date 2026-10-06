@@ -131,7 +131,7 @@ export function DashboardClient({
                     No note cards yet
                   </h4>
                   <p className="text-xs text-gray-500 max-w-sm mx-auto mb-4">
-                    Type a sentence in the Quick-Add bar above (e.g. "Received 5000 from Kumar for ticket by UPI") or click Manual Form.
+                    Type a sentence in the Quick-Add bar above (e.g. &quot;Received 5000 from Kumar for ticket by UPI&quot;) or click Manual Form.
                   </p>
                 </div>
               ) : (
