@@ -23,7 +23,11 @@ export default function SignupPage() {
         setError(res.error || "Signup failed");
         setIsLoading(false);
       } else {
-        setSuccess("Account submitted! Please wait for Owner (saipassportmdu@gmail.com) approval.");
+        if (res.redirectTo && res.redirectTo.includes("Owner+account+ready")) {
+          setSuccess("Owner account created and activated! You can now sign in.");
+        } else {
+          setSuccess("Account submitted! Please wait for Owner (saipassportmdu@gmail.com) approval.");
+        }
         setIsLoading(false);
       }
     } catch (err: any) {

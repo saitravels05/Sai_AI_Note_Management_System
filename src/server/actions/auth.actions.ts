@@ -73,6 +73,14 @@ export async function loginAction(formData: FormData): Promise<AuthResponse> {
 
   const user = await prisma.user.findUnique({ where: { email } });
   if (!user) {
+    const totalUsers = await prisma.user.count();
+    if (totalUsers === 0) {
+      return {
+        success: false,
+        error: "Database initialized! Please click 'Register Staff Account' below to create the initial Owner account.",
+      };
+    }
+
     // Audit failed attempt without revealing user existence
     await logAudit({
       userId: "anonymous",
@@ -160,20 +168,25 @@ export async function signupAction(formData: FormData): Promise<AuthResponse> {
 
     const passwordHash = await bcrypt.hash(password, 12);
 
+    const totalUsers = await prisma.user.count();
+    const isOwner = totalUsers === 0 || email === "saipassportmdu@gmail.com";
+
     await prisma.user.create({
       data: {
         name,
         email,
         passwordHash,
-        role: Role.STAFF,
-        status: UserStatus.PENDING_APPROVAL,
+        role: isOwner ? Role.OWNER : Role.STAFF,
+        status: isOwner ? UserStatus.ACTIVE : UserStatus.PENDING_APPROVAL,
         mustChangePassword: false,
       },
     });
 
     return {
       success: true,
-      redirectTo: "/login?message=Account+created.+Please+wait+for+Owner+approval.",
+      redirectTo: isOwner
+        ? "/login?message=Owner+account+ready.+Please+sign+in."
+        : "/login?message=Account+created.+Please+wait+for+Owner+approval.",
     };
   } catch (err: any) {
     console.error("[AUTH ERROR] signupAction:", err);
