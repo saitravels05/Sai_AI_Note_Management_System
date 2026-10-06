@@ -220,7 +220,6 @@ export function UsersClient({ user, initialUsers }: UsersClientProps) {
                               onChange={(e) => handleUpdateRole(u.id, e.target.value as Role)}
                               className="px-2.5 py-1 text-xs font-bold rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-orange-500"
                             >
-                              <option value={Role.OWNER}>OWNER</option>
                               <option value={Role.ADMIN}>ADMIN</option>
                               <option value={Role.MANAGER}>MANAGER</option>
                               <option value={Role.STAFF}>STAFF</option>

@@ -410,6 +410,10 @@ export async function updateUserRoleAction(userId: string, role: Role) {
     throw new Error("Security Alert: Only Business Owner can modify user roles.");
   }
 
+  if (role === Role.OWNER) {
+    throw new Error("System Policy: The system allows only 1 primary Owner account.");
+  }
+
   const updated = await prisma.user.update({
     where: { id: userId },
     data: { role },

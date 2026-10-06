@@ -168,8 +168,15 @@ export async function signupAction(formData: FormData): Promise<AuthResponse> {
 
     const passwordHash = await bcrypt.hash(password, 12);
 
-    const totalUsers = await prisma.user.count();
-    const isOwner = totalUsers === 0 || email === "saipassportmdu@gmail.com";
+    const ownerEmail = (process.env.OWNER_INITIAL_EMAIL || "saipassportmdu@gmail.com").toLowerCase().trim();
+    const existingOwner = await prisma.user.findFirst({
+      where: { role: Role.OWNER },
+    });
+
+    // Strictly 1 Owner account in the entire system:
+    // Only the designated owner email can ever be OWNER, and only if no Owner exists yet.
+    // All other registrations are strictly STAFF pending Owner approval.
+    const isOwner = email === ownerEmail && !existingOwner;
 
     await prisma.user.create({
       data: {
