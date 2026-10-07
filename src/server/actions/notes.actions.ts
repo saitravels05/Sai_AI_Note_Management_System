@@ -203,6 +203,217 @@ export async function createNoteCardAction(input: NoteCardInput) {
   return { success: true, record };
 }
 
+export interface UpdateNoteCardInput {
+  id: string;
+  title: string;
+  notes?: string;
+  type: RecordType;
+  category: ServiceCategory;
+  customerAmount?: number | string;
+  agentAmount?: number | string;
+  serviceCharge?: number | string;
+  amount?: number | string;
+  amountPaid?: number | string;
+  paymentMode: PaymentMode;
+  date?: string;
+  partyName?: string;
+  partyPhone?: string;
+}
+
+export async function updateNoteCardAction(input: UpdateNoteCardInput) {
+  const session = await getSession();
+  if (!session) {
+    throw new Error("Unauthorized: Please sign in.");
+  }
+
+  if (session.role === Role.VISITOR) {
+    throw new Error("Permission Denied: Visitors have read-only access.");
+  }
+
+  if (!input.title || !input.title.trim()) {
+    throw new Error("Card title / description is required.");
+  }
+
+  const existing = await prisma.noteRecord.findUnique({
+    where: { id: input.id },
+    include: { customer: true, monthPeriod: true },
+  });
+
+  if (!existing) {
+    throw new Error("Record not found.");
+  }
+
+  if (existing.isVoid) {
+    throw new Error("Cannot edit a voided transaction record.");
+  }
+
+  if (existing.monthPeriod && existing.monthPeriod.status === "CLOSED") {
+    throw new Error(`Period ${existing.monthPeriod.periodKey} is CLOSED and LOCKED. Please contact the Owner to unlock.`);
+  }
+
+  const custMoney =
+    input.customerAmount !== undefined && input.customerAmount !== ""
+      ? Money.from(input.customerAmount)
+      : input.amount !== undefined && input.amount !== ""
+      ? Money.from(input.amount)
+      : Money.zero();
+
+  const agentMoney =
+    input.agentAmount !== undefined && input.agentAmount !== ""
+      ? Money.from(input.agentAmount)
+      : Money.zero();
+
+  const serviceChargeMoney =
+    input.serviceCharge !== undefined && input.serviceCharge !== ""
+      ? Money.from(input.serviceCharge)
+      : custMoney.sub(agentMoney);
+
+  const primaryMoney = custMoney.isPositive()
+    ? custMoney
+    : agentMoney.isPositive()
+    ? agentMoney
+    : Money.from(input.amount || 0);
+
+  if (!primaryMoney.isPositive()) {
+    throw new Error("Customer amount must be a valid positive number.");
+  }
+
+  const amountDecimal = primaryMoney.toDecimal();
+  const customerAmountDecimal = custMoney.isPositive() ? custMoney.toDecimal() : amountDecimal;
+  const agentAmountDecimal =
+    agentMoney.isPositive() || (input.agentAmount !== undefined && input.agentAmount !== "")
+      ? agentMoney.toDecimal()
+      : null;
+  const serviceChargeDecimal = serviceChargeMoney.toDecimal();
+
+  const defaultPaid = input.paymentMode === PaymentMode.CREDIT_UNPAID ? 0 : amountDecimal;
+  const amountPaidDecimal = Money.from(input.amountPaid ?? defaultPaid).toDecimal();
+  const balanceDueDecimal = Money.from(amountDecimal).sub(amountPaidDecimal).toDecimal();
+
+  let paymentStatus: PaymentStatus = PaymentStatus.COMPLETED;
+  if (balanceDueDecimal.greaterThan(0)) {
+    paymentStatus = amountPaidDecimal.greaterThan(0) ? PaymentStatus.PARTIAL : PaymentStatus.PENDING;
+  }
+
+  // Find or update customer linkage
+  let customerId = existing.customerId;
+  const partyNameTrimmed = input.partyName?.trim() || "";
+  const partyPhoneTrimmed = input.partyPhone?.trim() || "";
+
+  // 1. Revert previous amounts from the previously linked customer
+  if (existing.customer) {
+    await prisma.customer.update({
+      where: { id: existing.customer.id },
+      data: {
+        totalBilled: Money.from(existing.customer.totalBilled).sub(existing.amount).toDecimal(),
+        totalPaid: Money.from(existing.customer.totalPaid).sub(existing.amountPaid).toDecimal(),
+        balanceDue: Money.from(existing.customer.balanceDue).sub(existing.balanceDue).toDecimal(),
+      },
+    });
+  }
+
+  // 2. Resolve/Update customer for the edited record
+  if (partyNameTrimmed || partyPhoneTrimmed) {
+    let customer = null;
+
+    if (partyPhoneTrimmed) {
+      customer = await prisma.customer.findFirst({
+        where: { phone: partyPhoneTrimmed },
+      });
+    }
+
+    if (!customer && partyNameTrimmed) {
+      customer = await prisma.customer.findFirst({
+        where: { name: { equals: partyNameTrimmed, mode: "insensitive" } },
+      });
+    }
+
+    const effectiveName = partyNameTrimmed || `Customer (${partyPhoneTrimmed})`;
+
+    if (!customer) {
+      customer = await prisma.customer.create({
+        data: {
+          name: effectiveName,
+          phone: partyPhoneTrimmed || null,
+          totalBilled: amountDecimal,
+          totalPaid: amountPaidDecimal,
+          balanceDue: balanceDueDecimal,
+        },
+      });
+    } else {
+      const freshCustomer = await prisma.customer.findUnique({ where: { id: customer.id } });
+      const currentBilled = freshCustomer?.totalBilled ?? customer.totalBilled;
+      const currentPaid = freshCustomer?.totalPaid ?? customer.totalPaid;
+      const currentDue = freshCustomer?.balanceDue ?? customer.balanceDue;
+
+      await prisma.customer.update({
+        where: { id: customer.id },
+        data: {
+          name: partyNameTrimmed || customer.name,
+          phone: partyPhoneTrimmed || customer.phone || null,
+          totalBilled: Money.from(currentBilled).add(amountDecimal).toDecimal(),
+          totalPaid: Money.from(currentPaid).add(amountPaidDecimal).toDecimal(),
+          balanceDue: Money.from(currentDue).add(balanceDueDecimal).toDecimal(),
+        },
+      });
+    }
+    customerId = customer.id;
+  } else {
+    customerId = null;
+  }
+
+  const dateObj = input.date ? new Date(input.date) : existing.date;
+  const periodKey = `${dateObj.getFullYear()}-${(dateObj.getMonth() + 1).toString().padStart(2, "0")}`;
+  const targetPeriod = await prisma.monthPeriod.findUnique({
+    where: { periodKey },
+  });
+
+  if (targetPeriod && targetPeriod.status === "CLOSED") {
+    throw new Error(`Period ${periodKey} is CLOSED and LOCKED. Please contact the Owner to unlock.`);
+  }
+
+  let finalNotes = input.notes || "";
+  if (partyPhoneTrimmed && !finalNotes.includes(partyPhoneTrimmed)) {
+    finalNotes = finalNotes ? `${finalNotes} | Ph: ${partyPhoneTrimmed}` : `Ph: ${partyPhoneTrimmed}`;
+  }
+
+  const updated = await prisma.noteRecord.update({
+    where: { id: input.id },
+    data: {
+      title: input.title,
+      notes: finalNotes || null,
+      type: input.type,
+      category: input.category,
+      amount: amountDecimal,
+      customerAmount: customerAmountDecimal,
+      agentAmount: agentAmountDecimal,
+      serviceCharge: serviceChargeDecimal,
+      commissionAmount: serviceChargeDecimal,
+      amountPaid: amountPaidDecimal,
+      balanceDue: balanceDueDecimal,
+      paymentMode: input.paymentMode,
+      paymentStatus,
+      date: dateObj,
+      customerId,
+      updatedById: session.id,
+      monthPeriodId: targetPeriod?.id ?? existing.monthPeriodId,
+    },
+  });
+
+  await logAudit({
+    userId: session.id,
+    action: AuditAction.UPDATE_RECORD,
+    entityType: "NoteRecord",
+    entityId: updated.id,
+    details: `Updated Note Card #${existing.recordNumber} (${input.title}) - Customer: ₹${amountDecimal.toString()}, Agent: ₹${agentMoney.toString()}, Profit: ₹${serviceChargeDecimal.toString()}`,
+  });
+
+  revalidatePath("/");
+  revalidatePath("/records");
+  revalidatePath("/customers");
+  return { success: true, record: updated };
+}
+
 export async function voidNoteCardAction(recordId: string, reason: string) {
   const session = await getSession();
   if (!session) {

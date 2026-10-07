@@ -17,7 +17,9 @@ import {
   Clock,
   Sparkles,
   Phone,
+  Pencil,
 } from "lucide-react";
+import { EditNoteCardModal } from "./EditNoteCardModal";
 
 export interface NoteCardProps {
   id: string;
@@ -69,6 +71,7 @@ export function NoteCard({
 }: NoteCardProps) {
   const t = translations[lang];
   const [isVoiding, setIsVoiding] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
 
   const formattedAmount = Money.from(amount).formatIndian(true);
   const formattedDue = Money.from(balanceDue).formatIndian(true);
@@ -142,15 +145,22 @@ export function NoteCard({
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <span className="flex items-center gap-1">
             <Calendar className="w-3 h-3" />
             {formattedDate}
           </span>
           <button
+            onClick={() => setIsEditOpen(true)}
+            className="p-1 text-gray-400 hover:text-orange-600 dark:hover:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-950/40 rounded transition-all cursor-pointer"
+            title="Edit Note Card"
+          >
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
+          <button
             onClick={handleVoid}
             disabled={isVoiding}
-            className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-600 rounded transition-all cursor-pointer"
+            className="opacity-70 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 rounded transition-all cursor-pointer"
             title="Void / Cancel Card"
           >
             <Trash2 className="w-3.5 h-3.5" />
@@ -255,6 +265,35 @@ export function NoteCard({
           </span>
         )}
       </div>
+
+      {/* Edit Note Card Modal */}
+      {isEditOpen && (
+        <EditNoteCardModal
+          isOpen={isEditOpen}
+          onClose={() => setIsEditOpen(false)}
+          record={{
+            id,
+            recordNumber,
+            title,
+            notes,
+            type,
+            category,
+            amount,
+            customerAmount,
+            agentAmount,
+            serviceCharge,
+            amountPaid,
+            balanceDue,
+            paymentMode,
+            paymentStatus,
+            date,
+            customerName,
+            customerPhone,
+          }}
+          lang={lang}
+          onUpdated={onRefresh}
+        />
+      )}
     </div>
   );
 }

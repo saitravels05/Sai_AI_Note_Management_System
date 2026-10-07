@@ -125,3 +125,23 @@ test("Accounting Engine: Train Ticket Journal Entry, Customer Amount, Agent Amou
   assert.strictEqual(profitMarginPercent.toFixed(2), "4.78"); // 4.78% margin on train ticket booking
 });
 
+test("Accounting Engine: Card Edit Financial Rebalance & Profit Update", () => {
+  // Scenario: Editing an existing Note Card (e.g., Flight Rider Dummy Ticket)
+  // Original: Customer = ₹2,000.00, Agent = ₹500.00, Profit = ₹1,500.00
+  const originalCustomerAmount = Money.from("2000.00");
+  const originalAgentAmount = Money.from("500.00");
+  const originalProfit = originalCustomerAmount.sub(originalAgentAmount);
+  assert.strictEqual(originalProfit.toFixed(2), "1500.00");
+
+  // User edits card: Updates Customer Amount to ₹2,500.00 and Agent Cost to ₹600.00
+  const updatedCustomerAmount = Money.from("2500.00");
+  const updatedAgentAmount = Money.from("600.00");
+  const updatedProfit = updatedCustomerAmount.sub(updatedAgentAmount);
+  assert.strictEqual(updatedProfit.toFixed(2), "1900.00");
+
+  // Financial differentials for Customer Ledger reconciliation:
+  const billedDiff = updatedCustomerAmount.sub(originalCustomerAmount);
+  assert.strictEqual(billedDiff.toFixed(2), "500.00");
+  const profitDiff = updatedProfit.sub(originalProfit);
+  assert.strictEqual(profitDiff.toFixed(2), "400.00");
+});

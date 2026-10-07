@@ -167,7 +167,9 @@ export function RecordsClient({ initialRecords }: RecordsClientProps) {
         <CalendarView records={filtered} lang="en" onRefresh={() => router.refresh()} />
       )}
 
-      {activeView === "table" && <TableView records={filtered} lang="en" />}
+      {activeView === "table" && (
+        <TableView records={filtered} lang="en" onRefresh={() => router.refresh()} />
+      )}
     </div>
   );
 }

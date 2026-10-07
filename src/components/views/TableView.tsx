@@ -4,16 +4,19 @@ import React, { useState } from "react";
 import { Money } from "@/lib/money";
 import { Language, translations } from "@/lib/i18n";
 import { RecordType } from "@prisma/client";
-import { Search } from "lucide-react";
+import { Search, Pencil } from "lucide-react";
+import { EditNoteCardModal } from "../notes/EditNoteCardModal";
 
 interface TableViewProps {
   records: any[];
   lang: Language;
+  onRefresh?: () => void;
 }
 
-export function TableView({ records, lang }: TableViewProps) {
+export function TableView({ records, lang, onRefresh }: TableViewProps) {
   const t = translations[lang];
   const [searchTerm, setSearchTerm] = useState("");
+  const [editingRecord, setEditingRecord] = useState<any | null>(null);
 
   const filtered = records.filter(
     (r) =>
@@ -56,6 +59,7 @@ export function TableView({ records, lang }: TableViewProps) {
               <th className="py-3 px-4 text-right">Agent Cost (₹)</th>
               <th className="py-3 px-4 text-right">Profit / Charge (₹)</th>
               <th className="py-3 px-4 text-right">Due (₹)</th>
+              <th className="py-3 px-4 text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 dark:divide-gray-700/60">
@@ -134,12 +138,53 @@ export function TableView({ records, lang }: TableViewProps) {
                       ? Money.from(r.balanceDue).formatIndian(true)
                       : "—"}
                   </td>
+                  <td className="py-3 px-4 text-right">
+                    <button
+                      onClick={() => setEditingRecord(r)}
+                      className="p-1.5 rounded-lg text-gray-400 hover:text-orange-600 dark:hover:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-950/40 transition cursor-pointer"
+                      title="Edit Record"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                  </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
       </div>
+
+      {/* Edit Note Card Modal */}
+      {editingRecord && (
+        <EditNoteCardModal
+          isOpen={!!editingRecord}
+          onClose={() => setEditingRecord(null)}
+          record={{
+            id: editingRecord.id,
+            recordNumber: editingRecord.recordNumber,
+            title: editingRecord.title,
+            notes: editingRecord.notes,
+            type: editingRecord.type,
+            category: editingRecord.category,
+            amount: editingRecord.amount,
+            customerAmount: editingRecord.customerAmount,
+            agentAmount: editingRecord.agentAmount,
+            serviceCharge: editingRecord.serviceCharge,
+            amountPaid: editingRecord.amountPaid,
+            balanceDue: editingRecord.balanceDue,
+            paymentMode: editingRecord.paymentMode,
+            paymentStatus: editingRecord.paymentStatus,
+            date: editingRecord.date,
+            customerName: editingRecord.customer?.name,
+            customerPhone: editingRecord.customer?.phone,
+          }}
+          lang={lang}
+          onUpdated={() => {
+            onRefresh?.();
+            setEditingRecord(null);
+          }}
+        />
+      )}
     </div>
   );
 }
