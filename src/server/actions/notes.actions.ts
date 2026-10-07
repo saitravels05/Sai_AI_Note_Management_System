@@ -21,6 +21,7 @@ export interface NoteCardInput {
   paymentMode: PaymentMode;
   date?: string;
   partyName?: string;
+  partyPhone?: string;
   gstRate?: number | string;
   tags?: string[];
   color?: string;
@@ -99,17 +100,33 @@ export async function createNoteCardAction(input: NoteCardInput) {
   const gstRate = Money.from(input.gstRate ?? 0).toDecimal();
   const gstAmount = calculateGst(amountDecimal, gstRate).toDecimal();
 
-  // Find or create customer if a party name was entered
+  // Find or create customer if a party name or phone number was entered
   let customerId: string | undefined = undefined;
-  if (input.partyName && input.partyName.trim()) {
-    const trimmed = input.partyName.trim();
-    let customer = await prisma.customer.findFirst({
-      where: { name: { equals: trimmed, mode: "insensitive" } },
-    });
+  const partyNameTrimmed = input.partyName?.trim() || "";
+  const partyPhoneTrimmed = input.partyPhone?.trim() || "";
+
+  if (partyNameTrimmed || partyPhoneTrimmed) {
+    let customer = null;
+
+    if (partyPhoneTrimmed) {
+      customer = await prisma.customer.findFirst({
+        where: { phone: partyPhoneTrimmed },
+      });
+    }
+
+    if (!customer && partyNameTrimmed) {
+      customer = await prisma.customer.findFirst({
+        where: { name: { equals: partyNameTrimmed, mode: "insensitive" } },
+      });
+    }
+
+    const effectiveName = partyNameTrimmed || `Customer (${partyPhoneTrimmed})`;
+
     if (!customer) {
       customer = await prisma.customer.create({
         data: {
-          name: trimmed,
+          name: effectiveName,
+          phone: partyPhoneTrimmed || null,
           totalBilled: amountDecimal,
           totalPaid: amountPaidDecimal,
           balanceDue: balanceDueDecimal,
@@ -119,6 +136,7 @@ export async function createNoteCardAction(input: NoteCardInput) {
       await prisma.customer.update({
         where: { id: customer.id },
         data: {
+          phone: partyPhoneTrimmed || customer.phone || null,
           totalBilled: Money.from(customer.totalBilled).add(amountDecimal).toDecimal(),
           totalPaid: Money.from(customer.totalPaid).add(amountPaidDecimal).toDecimal(),
           balanceDue: Money.from(customer.balanceDue).add(balanceDueDecimal).toDecimal(),
@@ -141,11 +159,16 @@ export async function createNoteCardAction(input: NoteCardInput) {
     throw new Error(`Period ${periodKey} is CLOSED and LOCKED. Please contact the Owner to unlock.`);
   }
 
+  let finalNotes = input.notes || "";
+  if (partyPhoneTrimmed && !finalNotes.includes(partyPhoneTrimmed)) {
+    finalNotes = finalNotes ? `${finalNotes} | Ph: ${partyPhoneTrimmed}` : `Ph: ${partyPhoneTrimmed}`;
+  }
+
   const record = await prisma.noteRecord.create({
     data: {
       recordNumber,
       title: input.title,
-      notes: input.notes,
+      notes: finalNotes || null,
       type: input.type,
       category: input.category,
       amount: amountDecimal,

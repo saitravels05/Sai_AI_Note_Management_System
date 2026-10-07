@@ -161,6 +161,7 @@ export function CalendarView({ records, lang, onRefresh }: CalendarViewProps) {
                   paymentStatus={r.paymentStatus}
                   date={r.date}
                   customerName={r.customer?.name}
+                  customerPhone={r.customer?.phone}
                   isPinned={r.isPinned}
                   aiParsed={r.aiParsed}
                   lang={lang}

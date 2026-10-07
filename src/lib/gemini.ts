@@ -12,6 +12,7 @@ export interface ParsedNoteCard {
   paymentMode: PaymentMode;
   notes?: string;
   partyName?: string;
+  partyPhone?: string;
   confidence: number;
   source: "gemini" | "local_heuristic";
 }
@@ -38,6 +39,7 @@ Extract and return a JSON object with:
 - category: one of "FLIGHT_TICKET", "TRAIN_TICKET", "BUS_TICKET", "HOTEL_BOOKING", "TOUR_PACKAGE", "PASSPORT_SERVICE", "VISA_SERVICE", "VEHICLE_RENTAL", "OFFICE_EXPENSE", "COMMISSION", "OTHER"
 - paymentMode: one of "CASH", "UPI", "BANK_TRANSFER", "CARD", "CREDIT_UNPAID"
 - partyName: name of customer or vendor mentioned
+- partyPhone: contact number or phone with dial code if mentioned (e.g., "+91 9840123456" or "9840123456")
 - confidence: number between 0.50 and 0.99
 
 Respond ONLY with valid JSON.`;
@@ -69,6 +71,7 @@ Respond ONLY with valid JSON.`;
         paymentMode: parsed.paymentMode in PaymentMode ? (parsed.paymentMode as PaymentMode) : PaymentMode.CASH,
         notes: text,
         partyName: parsed.partyName || "",
+        partyPhone: parsed.partyPhone || undefined,
         confidence: Number(parsed.confidence) || 0.95,
         source: "gemini",
       };
@@ -165,6 +168,13 @@ function parseWithLocalHeuristics(text: string): ParsedNoteCard {
     partyName = fromMatch[1];
   }
 
+  // 5b. Contact / Phone Number Extraction
+  let partyPhone: string | undefined = undefined;
+  const phoneMatch = text.match(/(?:\+?\d{1,3}[-\s]?)?[6-9]\d{9}/);
+  if (phoneMatch) {
+    partyPhone = phoneMatch[0].trim();
+  }
+
   // 6. Explicit Customer vs Agent Amount parsing if present
   let customerAmount = amount;
   let agentAmount = 0;
@@ -189,6 +199,7 @@ function parseWithLocalHeuristics(text: string): ParsedNoteCard {
     paymentMode,
     notes: text,
     partyName,
+    partyPhone,
     confidence: 0.85,
     source: "local_heuristic",
   };

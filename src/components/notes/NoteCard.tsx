@@ -16,6 +16,7 @@ import {
   CheckCircle2,
   Clock,
   Sparkles,
+  Phone,
 } from "lucide-react";
 
 export interface NoteCardProps {
@@ -35,6 +36,7 @@ export interface NoteCardProps {
   paymentStatus: PaymentStatus;
   date: string | Date;
   customerName?: string | null;
+  customerPhone?: string | null;
   isPinned: boolean;
   color?: string | null;
   aiParsed?: boolean;
@@ -59,6 +61,7 @@ export function NoteCard({
   paymentStatus,
   date,
   customerName,
+  customerPhone,
   isPinned,
   aiParsed,
   lang,
@@ -228,6 +231,20 @@ export function NoteCard({
             <User className="w-3 h-3" />
             {customerName}
           </span>
+        )}
+
+        {/* Contact Phone Badge with WhatsApp click-to-chat */}
+        {customerPhone && (
+          <a
+            href={`https://wa.me/${customerPhone.replace(/[^0-9]/g, "")}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:hover:bg-emerald-900 dark:text-emerald-300 font-medium transition cursor-pointer"
+            title="Chat on WhatsApp"
+          >
+            <Phone className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+            <span className="font-mono">{customerPhone}</span>
+          </a>
         )}
 
         {/* Balance Due indicator if pending */}

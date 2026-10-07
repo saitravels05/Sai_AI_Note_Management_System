@@ -4,7 +4,34 @@ import React, { useState, useMemo } from "react";
 import { translations, Language } from "@/lib/i18n";
 import { parseSentenceAction, createNoteCardAction } from "@/server/actions/notes.actions";
 import { RecordType, ServiceCategory, PaymentMode } from "@prisma/client";
-import { Sparkles, Check, X, Loader2, PlusCircle, TrendingUp, Calculator } from "lucide-react";
+import { Sparkles, Check, X, Loader2, PlusCircle, TrendingUp, Calculator, Phone } from "lucide-react";
+
+export const COUNTRY_DIAL_CODES = [
+  { code: "+91", country: "India", flag: "🇮🇳" },
+  { code: "+971", country: "UAE", flag: "🇦🇪" },
+  { code: "+65", country: "Singapore", flag: "🇸🇬" },
+  { code: "+60", country: "Malaysia", flag: "🇲🇾" },
+  { code: "+966", country: "Saudi Arabia", flag: "🇸🇦" },
+  { code: "+968", country: "Oman", flag: "🇴🇲" },
+  { code: "+974", country: "Qatar", flag: "🇶🇦" },
+  { code: "+965", country: "Kuwait", flag: "🇰🇼" },
+  { code: "+973", country: "Bahrain", flag: "🇧🇭" },
+  { code: "+94", country: "Sri Lanka", flag: "🇱🇰" },
+  { code: "+66", country: "Thailand", flag: "🇹🇭" },
+  { code: "+960", country: "Maldives", flag: "🇲🇻" },
+  { code: "+44", country: "UK", flag: "🇬🇧" },
+  { code: "+1", country: "USA / Canada", flag: "🇺🇸" },
+  { code: "+61", country: "Australia", flag: "🇦🇺" },
+  { code: "+49", country: "Germany", flag: "🇩🇪" },
+  { code: "+33", country: "France", flag: "🇫🇷" },
+  { code: "+39", country: "Italy", flag: "🇮🇹" },
+  { code: "+81", country: "Japan", flag: "🇯🇵" },
+  { code: "+86", country: "China", flag: "🇨🇳" },
+  { code: "+63", country: "Philippines", flag: "🇵🇭" },
+  { code: "+62", country: "Indonesia", flag: "🇮🇩" },
+  { code: "+977", country: "Nepal", flag: "🇳🇵" },
+  { code: "+880", country: "Bangladesh", flag: "🇧🇩" },
+];
 
 interface QuickAddBarProps {
   lang: Language;
@@ -26,6 +53,8 @@ export function QuickAddBar({ lang, onRecordCreated }: QuickAddBarProps) {
   const [category, setCategory] = useState<ServiceCategory>(ServiceCategory.OTHER);
   const [paymentMode, setPaymentMode] = useState<PaymentMode>(PaymentMode.CASH);
   const [partyName, setPartyName] = useState("");
+  const [dialCode, setDialCode] = useState("+91");
+  const [contactNo, setContactNo] = useState("");
   const [notes, setNotes] = useState("");
   const [confidence, setConfidence] = useState<number | null>(null);
 
@@ -61,6 +90,19 @@ export function QuickAddBar({ lang, onRecordCreated }: QuickAddBarProps) {
       setCategory(parsed.category);
       setPaymentMode(parsed.paymentMode);
       setPartyName(parsed.partyName || "");
+      if (parsed.partyPhone) {
+        const rawPhone = parsed.partyPhone.trim();
+        const matchedDial = COUNTRY_DIAL_CODES.find((c) => rawPhone.startsWith(c.code));
+        if (matchedDial) {
+          setDialCode(matchedDial.code);
+          setContactNo(rawPhone.slice(matchedDial.code.length).trim());
+        } else if (rawPhone.startsWith("+")) {
+          setContactNo(rawPhone);
+        } else {
+          setDialCode("+91");
+          setContactNo(rawPhone);
+        }
+      }
       setNotes(parsed.notes || textToParse);
       setConfidence(parsed.confidence);
       setIsExpanded(true);
@@ -77,6 +119,14 @@ export function QuickAddBar({ lang, onRecordCreated }: QuickAddBarProps) {
 
     setIsSaving(true);
     try {
+      let fullPartyPhone: string | undefined = undefined;
+      const cleanContact = contactNo.trim();
+      if (cleanContact) {
+        fullPartyPhone = cleanContact.startsWith("+")
+          ? cleanContact
+          : `${dialCode} ${cleanContact}`;
+      }
+
       await createNoteCardAction({
         title,
         customerAmount,
@@ -87,6 +137,7 @@ export function QuickAddBar({ lang, onRecordCreated }: QuickAddBarProps) {
         category,
         paymentMode,
         partyName,
+        partyPhone: fullPartyPhone,
         notes,
       });
 
@@ -96,6 +147,8 @@ export function QuickAddBar({ lang, onRecordCreated }: QuickAddBarProps) {
       setCustomerAmount("");
       setAgentAmount("");
       setPartyName("");
+      setContactNo("");
+      setDialCode("+91");
       setNotes("");
       setIsExpanded(false);
       setConfidence(null);
@@ -321,15 +374,51 @@ export function QuickAddBar({ lang, onRecordCreated }: QuickAddBarProps) {
           {/* Customer / Supplier Name */}
           <div className="col-span-1 md:col-span-2">
             <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">
-              Customer / Supplier Name
+              {t.customerOrSupplier || "Customer / Supplier Name"}
             </label>
             <input
               type="text"
               value={partyName}
               onChange={(e) => setPartyName(e.target.value)}
               placeholder="e.g. Trichy Office"
-              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-orange-500"
+              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 text-gray-900 dark:text-white"
             />
+          </div>
+
+          {/* Contact No. with Dial Code */}
+          <div className="col-span-1 md:col-span-2">
+            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1 flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <Phone className="w-3.5 h-3.5 text-orange-500" />
+                {t.contactPhone || "Contact No. / WhatsApp"}
+              </span>
+              <span className="text-[10px] text-gray-400 dark:text-gray-500 font-normal">Optional</span>
+            </label>
+            <div className="flex rounded-lg shadow-2xs">
+              <div className="relative shrink-0">
+                <select
+                  value={dialCode}
+                  onChange={(e) => setDialCode(e.target.value)}
+                  className="h-full px-2.5 py-2 bg-gray-100 dark:bg-gray-800 border border-r-0 border-gray-200 dark:border-gray-700 rounded-l-lg text-xs font-semibold text-gray-700 dark:text-gray-200 focus:ring-2 focus:ring-orange-500 focus:z-10 cursor-pointer"
+                  title="Select Country Dial Code"
+                >
+                  {COUNTRY_DIAL_CODES.map((c) => (
+                    <option key={`${c.code}-${c.country}`} value={c.code}>
+                      {c.flag} {c.code} ({c.country})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="relative flex-1">
+                <input
+                  type="tel"
+                  value={contactNo}
+                  onChange={(e) => setContactNo(e.target.value)}
+                  placeholder="e.g. 98401 23456"
+                  className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-r-lg text-sm focus:ring-2 focus:ring-orange-500 font-mono text-gray-900 dark:text-white"
+                />
+              </div>
+            </div>
           </div>
 
           {/* Real-time Profit Formula Pill */}

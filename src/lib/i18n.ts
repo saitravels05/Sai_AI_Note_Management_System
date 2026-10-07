@@ -37,6 +37,9 @@ export const translations = {
     customerAmount: "Customer Amount",
     agentAmount: "Agent Amount",
     serviceCharge: "Service Charge / Profit",
+    customerOrSupplier: "Customer / Supplier Name",
+    contactPhone: "Contact No. / WhatsApp",
+    dialCode: "Dial Code",
     paymentModes: {
       CASH: "Cash",
       UPI: "UPI (GPay / PhonePe)",
@@ -99,6 +102,9 @@ export const translations = {
     customerAmount: "வாடிக்கையாளர் தொகை",
     agentAmount: "ஏஜென்ட் தொகை",
     serviceCharge: "சேவைக் கட்டணம் / லாபம்",
+    customerOrSupplier: "வாடிக்கையாளர் / ஏஜென்ட் பெயர்",
+    contactPhone: "தொலைபேசி எண் / வாட்ஸ்அப்",
+    dialCode: "டயல் குறியீடு",
     paymentModes: {
       CASH: "ரொக்கம் (Cash)",
       UPI: "UPI (GPay / PhonePe)",

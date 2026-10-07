@@ -74,6 +74,7 @@ export function TimelineView({ records, lang, onRefresh }: TimelineViewProps) {
                   paymentStatus={record.paymentStatus}
                   date={record.date}
                   customerName={record.customer?.name}
+                  customerPhone={record.customer?.phone}
                   isPinned={record.isPinned}
                   aiParsed={record.aiParsed}
                   lang={lang}

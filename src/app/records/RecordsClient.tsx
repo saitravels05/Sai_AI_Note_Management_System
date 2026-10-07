@@ -146,6 +146,7 @@ export function RecordsClient({ initialRecords }: RecordsClientProps) {
               paymentStatus={r.paymentStatus}
               date={r.date}
               customerName={r.customer?.name}
+              customerPhone={r.customer?.phone}
               isPinned={r.isPinned}
               lang="en"
               onRefresh={() => router.refresh()}

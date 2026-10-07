@@ -60,3 +60,13 @@ test("AI Quick-Add: Train Ticket Category & Customer/Agent Amount Parsing", asyn
   assert.strictEqual(result.paymentMode, PaymentMode.UPI);
 });
 
+test("AI Quick-Add: Contact Number & Dial Code Extraction", async () => {
+  const sentence = "Received 7500 from Ramesh 9840123456 for Singapore visa service by UPI";
+  const result = await parseQuickAddSentence(sentence);
+
+  assert.strictEqual(result.amount, 7500);
+  assert.strictEqual(result.partyName, "Ramesh");
+  assert.strictEqual(result.partyPhone, "9840123456");
+  assert.strictEqual(result.category, ServiceCategory.VISA_SERVICE);
+  assert.strictEqual(result.paymentMode, PaymentMode.UPI);
+});
