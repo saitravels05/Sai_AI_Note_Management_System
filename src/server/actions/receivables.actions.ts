@@ -48,7 +48,7 @@ export async function getReceivablesAgingAction(): Promise<ReceivablesAgingSumma
       balanceDue: { gt: 0 },
     },
     include: {
-      customer: true,
+      customer: { select: { name: true, phone: true } },
     },
     orderBy: { date: "asc" },
   });

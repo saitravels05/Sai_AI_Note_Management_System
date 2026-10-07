@@ -14,8 +14,9 @@ export async function getCustomersAction() {
 
   const customers = await prisma.customer.findMany({
     include: {
-      records: { select: { id: true, amount: true, balanceDue: true } },
-      bookings: { select: { id: true, bookingCode: true, destination: true } },
+      _count: {
+        select: { records: true, bookings: true },
+      },
     },
     orderBy: { name: "asc" },
   });
@@ -32,8 +33,8 @@ export async function getCustomersAction() {
     totalBilled: c.totalBilled.toString(),
     totalPaid: c.totalPaid.toString(),
     balanceDue: c.balanceDue.toString(),
-    recordCount: c.records.length,
-    bookingCount: c.bookings.length,
+    recordCount: c._count.records,
+    bookingCount: c._count.bookings,
   }));
 }
 

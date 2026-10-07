@@ -2,9 +2,22 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { AppShell } from "@/components/layout/AppShell";
-import { AnalyticsCharts } from "@/components/dashboard/AnalyticsCharts";
 import { QuickAddBar } from "@/components/notes/QuickAddBar";
+
+const AnalyticsCharts = dynamic(
+  () => import("@/components/dashboard/AnalyticsCharts").then((mod) => mod.AnalyticsCharts),
+  {
+    loading: () => (
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 my-6">
+        <div className="h-80 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 animate-pulse" />
+        <div className="h-80 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 animate-pulse" />
+      </div>
+    ),
+    ssr: false,
+  }
+);
 import {
   TrendingUp,
   TrendingDown,

@@ -18,8 +18,24 @@ export default async function HomePage() {
     redirect("/change-password");
   }
 
-  // 1. Fetch active records
-  const [allRecords, suppliers, passportAppsCount] = await Promise.all([
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Filter boundary for charts: start of month, 5 months ago
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
+  sixMonthsAgo.setDate(1);
+  sixMonthsAgo.setHours(0, 0, 0, 0);
+
+  // High-performance parallelized data fetching
+  const [
+    recentRecords,
+    activeRecordsSubset,
+    customerDuesAgg,
+    supplierPayablesAgg,
+    passportAppsCount,
+  ] = await Promise.all([
+    // 1. Fetch only the 15 most recent records with joins
     prisma.noteRecord.findMany({
       where: { isVoid: false },
       include: {
@@ -27,10 +43,36 @@ export default async function HomePage() {
         supplier: { select: { id: true, name: true } },
       },
       orderBy: { date: "desc" },
+      take: 15,
     }),
-    prisma.supplier.findMany({
-      select: { balanceDue: true },
+
+    // 2. Fetch only minimal scalar fields for 6-month trends and today's cashflow
+    prisma.noteRecord.findMany({
+      where: {
+        isVoid: false,
+        date: { gte: sixMonthsAgo },
+      },
+      select: {
+        type: true,
+        category: true,
+        amount: true,
+        date: true,
+      },
     }),
+
+    // 3. Ultra-fast database native aggregation for customer receivables
+    prisma.noteRecord.aggregate({
+      where: { isVoid: false, balanceDue: { gt: 0 } },
+      _sum: { balanceDue: true },
+    }),
+
+    // 4. Ultra-fast database native aggregation for supplier payables
+    prisma.supplier.aggregate({
+      where: { balanceDue: { gt: 0 } },
+      _sum: { balanceDue: true },
+    }),
+
+    // 5. Active passport apps count
     prisma.passportApplication.count({
       where: {
         status: {
@@ -40,13 +82,8 @@ export default async function HomePage() {
     }),
   ]);
 
-  // 2. Metrics computation
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
   let todayInflow = Money.zero();
   let todayOutflow = Money.zero();
-  let totalCustomerDues = Money.zero();
 
   // Category accumulation
   const categorySums: Record<string, Money> = {};
@@ -63,7 +100,7 @@ export default async function HomePage() {
     trendMap[key] = { income: Money.zero(), expense: Money.zero() };
   }
 
-  for (const r of allRecords) {
+  for (const r of activeRecordsSubset) {
     const amt = Money.from(r.amount);
     const rDate = new Date(r.date);
     const dateStart = new Date(r.date);
@@ -73,11 +110,6 @@ export default async function HomePage() {
     if (dateStart.getTime() === today.getTime()) {
       if (r.type === RecordType.INCOME) todayInflow = todayInflow.add(amt);
       if (r.type === RecordType.EXPENSE) todayOutflow = todayOutflow.add(amt);
-    }
-
-    // Customer dues
-    if (r.balanceDue) {
-      totalCustomerDues = totalCustomerDues.add(r.balanceDue);
     }
 
     // Category breakdown (for Inflow)
@@ -97,12 +129,8 @@ export default async function HomePage() {
     }
   }
 
-  // Calculate total supplier payables
-  let totalSupplierPayables = Money.zero();
-  for (const s of suppliers) {
-    totalSupplierPayables = totalSupplierPayables.add(s.balanceDue);
-  }
-
+  const totalCustomerDues = Money.from(customerDuesAgg._sum.balanceDue || 0);
+  const totalSupplierPayables = Money.from(supplierPayablesAgg._sum.balanceDue || 0);
   const netBalance = todayInflow.sub(todayOutflow);
 
   // Format monthly trend array for Recharts
@@ -122,11 +150,8 @@ export default async function HomePage() {
     .sort((a, b) => b.value - a.value)
     .slice(0, 6);
 
-  // Format monthly trend array for Recharts
-  const finalMonthlyTrend = monthlyTrend;
-
   // Recent 15 records
-  const serializedRecent = allRecords.slice(0, 15).map((r) => ({
+  const serializedRecent = recentRecords.map((r) => ({
     id: r.id,
     recordNumber: r.recordNumber,
     title: r.title,
@@ -162,7 +187,7 @@ export default async function HomePage() {
         rawTodayInflow: todayInflow.toNumber(),
         rawTodayOutflow: todayOutflow.toNumber(),
       }}
-      monthlyTrend={finalMonthlyTrend}
+      monthlyTrend={monthlyTrend}
       categoryData={finalCategoryData}
       recentRecords={serializedRecent}
     />

@@ -55,6 +55,10 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   serverExternalPackages: ["pdfkit"],
   poweredByHeader: false, // Disables X-Powered-By: Next.js header (prevents server fingerprinting)
+  compress: true,
+  experimental: {
+    optimizePackageImports: ["lucide-react", "recharts", "@prisma/client", "date-fns"],
+  },
   async headers() {
     return [
       {

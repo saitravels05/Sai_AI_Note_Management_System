@@ -13,7 +13,7 @@ export async function getSuppliersAction() {
 
   const suppliers = await prisma.supplier.findMany({
     include: {
-      records: { select: { id: true, amount: true, balanceDue: true } },
+      _count: { select: { records: true } },
     },
     orderBy: { name: "asc" },
   });
@@ -29,7 +29,7 @@ export async function getSuppliersAction() {
     totalBilled: s.totalBilled.toString(),
     totalPaid: s.totalPaid.toString(),
     balanceDue: s.balanceDue.toString(),
-    transactionCount: s.records.length,
+    transactionCount: s._count.records,
   }));
 }
 
