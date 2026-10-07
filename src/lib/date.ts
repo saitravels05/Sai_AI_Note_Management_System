@@ -64,3 +64,31 @@ export function formatDateIndian(date: Date | string): string {
 export function getTodayIST(): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
 }
+
+/**
+ * Get start and end Date for a given date in Asia/Kolkata (IST)
+ */
+export function getISTDayRange(referenceDate?: Date | string): { start: Date; end: Date } {
+  const d = referenceDate ? (typeof referenceDate === "string" ? new Date(referenceDate) : referenceDate) : new Date();
+  const istDateString = d.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+  const start = new Date(`${istDateString}T00:00:00.000+05:30`);
+  const end = new Date(`${istDateString}T23:59:59.999+05:30`);
+  return { start, end };
+}
+
+/**
+ * Get start and end Date for a given month in Asia/Kolkata (IST)
+ */
+export function getISTMonthRange(referenceDate?: Date | string): { start: Date; end: Date } {
+  const d = referenceDate ? (typeof referenceDate === "string" ? new Date(referenceDate) : referenceDate) : new Date();
+  const istDateString = d.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+  const [yearStr, monthStr] = istDateString.split("-");
+  const year = parseInt(yearStr, 10);
+  const month = parseInt(monthStr, 10);
+  
+  const start = new Date(`${yearStr}-${monthStr}-01T00:00:00.000+05:30`);
+  const lastDay = new Date(year, month, 0).getDate();
+  const lastDayStr = String(lastDay).padStart(2, "0");
+  const end = new Date(`${yearStr}-${monthStr}-${lastDayStr}T23:59:59.999+05:30`);
+  return { start, end };
+}

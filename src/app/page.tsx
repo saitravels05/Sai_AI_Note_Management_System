@@ -1,6 +1,7 @@
 import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/db";
 import { Money } from "@/lib/money";
+import { getISTDayRange } from "@/lib/date";
 import { ExecutiveDashboard } from "@/components/dashboard/ExecutiveDashboard";
 import {
   calculateDashboardMetrics,
@@ -174,10 +175,7 @@ export default async function HomePage() {
     };
   };
 
-  const todayStart = new Date(today);
-  todayStart.setHours(0, 0, 0, 0);
-  const todayEnd = new Date(today);
-  todayEnd.setHours(23, 59, 59, 999);
+  const { start: todayStart, end: todayEnd } = getISTDayRange(today);
 
   // Build Drill-down Datasets
   const drillDownDatasets = {
@@ -227,22 +225,27 @@ export default async function HomePage() {
   }));
 
   // Recent 15 records for the bottom table
-  const recentRecords = allRecords.slice(0, 15).map((r) => ({
-    id: r.id,
-    recordNumber: r.recordNumber,
-    title: r.title,
-    type: r.type,
-    category: r.category,
-    amount: Money.from(r.amount).formatIndian(false),
-    amountPaid: Money.from(r.amountPaid).formatIndian(false),
-    balanceDue: Money.from(r.balanceDue).formatIndian(false),
-    paymentMode: r.paymentMode,
-    paymentStatus: r.paymentStatus,
-    date: new Date(r.date).toISOString().split("T")[0],
-    customerName: r.customer?.name || null,
-    customerPhone: r.customer?.phone || null,
-    notes: r.notes || null,
-  }));
+  const recentRecords = allRecords.slice(0, 15).map((r) => {
+    const amt = getRecordAmount(r);
+    const paid = getRecordPaid(r, amt);
+    const due = getRecordDue(r, amt, paid);
+    return {
+      id: r.id,
+      recordNumber: r.recordNumber,
+      title: r.title,
+      type: r.type,
+      category: r.category,
+      amount: amt.formatIndian(false),
+      amountPaid: paid.formatIndian(false),
+      balanceDue: due.formatIndian(false),
+      paymentMode: r.paymentMode,
+      paymentStatus: r.paymentStatus,
+      date: new Date(r.date).toISOString().split("T")[0],
+      customerName: r.customer?.name || null,
+      customerPhone: r.customer?.phone || null,
+      notes: r.notes || null,
+    };
+  });
 
   return (
     <ExecutiveDashboard

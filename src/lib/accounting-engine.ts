@@ -1,4 +1,5 @@
 import { Money } from "@/lib/money";
+import { getISTDayRange, getISTMonthRange } from "@/lib/date";
 import { NoteRecord, PaymentMode, RecordType, ServiceCategory } from "@prisma/client";
 
 /**
@@ -128,44 +129,100 @@ export interface ReconciliationStatus {
 
 /**
  * Safely extract the primary financial value of a journal entry.
- * Resolves amount, customerAmount, agentAmount, or serviceCharge gracefully.
+ * Resolves amount, customerAmount, agentAmount, serviceCharge, or alias fields gracefully.
+ * Never fails on formatted currency strings or commas.
  */
 export function getRecordAmount(r: any): Money {
-  if (r.amount !== undefined && r.amount !== null && Number(r.amount) > 0) {
-    return Money.from(r.amount);
+  if (!r) return Money.zero();
+
+  // 1. Primary amount
+  if (r.amount !== undefined && r.amount !== null) {
+    const m = Money.from(r.amount);
+    if (m.isPositive()) return m;
   }
-  if (r.customerAmount !== undefined && r.customerAmount !== null && Number(r.customerAmount) > 0) {
-    return Money.from(r.customerAmount);
+  // 2. Customer amount (Selling Price / Fare)
+  if (r.customerAmount !== undefined && r.customerAmount !== null) {
+    const m = Money.from(r.customerAmount);
+    if (m.isPositive()) return m;
   }
-  if (r.agentAmount !== undefined && r.agentAmount !== null && Number(r.agentAmount) > 0) {
-    return Money.from(r.agentAmount);
+  // 3. Agent amount (Purchase Cost / Vendor Fare)
+  if (r.agentAmount !== undefined && r.agentAmount !== null) {
+    const m = Money.from(r.agentAmount);
+    if (m.isPositive()) return m;
   }
-  if (r.serviceCharge !== undefined && r.serviceCharge !== null && Number(r.serviceCharge) > 0) {
-    return Money.from(r.serviceCharge);
+  // 4. Service charge / Commission / Fee
+  if (r.serviceCharge !== undefined && r.serviceCharge !== null) {
+    const m = Money.from(r.serviceCharge);
+    if (m.isPositive()) return m;
   }
+  // 5. Total amount / Selling price aliases
+  if (r.totalAmount !== undefined && r.totalAmount !== null) {
+    const m = Money.from(r.totalAmount);
+    if (m.isPositive()) return m;
+  }
+  if (r.sellingPrice !== undefined && r.sellingPrice !== null) {
+    const m = Money.from(r.sellingPrice);
+    if (m.isPositive()) return m;
+  }
+
   return Money.from(r.amount || 0);
 }
 
 export function getRecordPaid(r: any, effectiveAmt?: Money): Money {
+  if (!r) return Money.zero();
   const base = effectiveAmt || getRecordAmount(r);
+
   if (r.amountPaid !== undefined && r.amountPaid !== null) {
-    return Money.from(r.amountPaid);
+    const m = Money.from(r.amountPaid);
+    if (m.isPositive()) return m;
   }
-  if (r.paymentStatus === "COMPLETED" && r.paymentMode !== "CREDIT_UNPAID") {
+
+  // Check aliases
+  if (r.receivedAmount !== undefined && r.receivedAmount !== null) {
+    const m = Money.from(r.receivedAmount);
+    if (m.isPositive()) return m;
+  }
+  if (r.customerPaid !== undefined && r.customerPaid !== null) {
+    const m = Money.from(r.customerPaid);
+    if (m.isPositive()) return m;
+  }
+
+  // If paymentStatus is COMPLETED, not unpaid credit, and no outstanding balance due
+  if (
+    r.paymentStatus === "COMPLETED" &&
+    r.paymentMode !== "CREDIT_UNPAID" &&
+    (!r.balanceDue || Money.from(r.balanceDue).isZero())
+  ) {
     return base;
   }
+
   return Money.zero();
 }
 
 export function getRecordDue(r: any, effectiveAmt?: Money, effectivePaid?: Money): Money {
+  if (!r) return Money.zero();
   const base = effectiveAmt || getRecordAmount(r);
   const paid = effectivePaid || getRecordPaid(r, base);
+
   if (r.balanceDue !== undefined && r.balanceDue !== null) {
-    return Money.from(r.balanceDue);
+    const m = Money.from(r.balanceDue);
+    if (m.isPositive()) return m;
   }
+
+  // Check aliases
+  if (r.customerDue !== undefined && r.customerDue !== null) {
+    const m = Money.from(r.customerDue);
+    if (m.isPositive()) return m;
+  }
+  if (r.vendorDue !== undefined && r.vendorDue !== null) {
+    const m = Money.from(r.vendorDue);
+    if (m.isPositive()) return m;
+  }
+
   if (r.paymentStatus === "COMPLETED") {
     return Money.zero();
   }
+
   const calc = base.sub(paid);
   return calc.isPositive() ? calc : Money.zero();
 }
@@ -187,14 +244,9 @@ export function calculateDashboardMetrics(
 ): DashboardMetricsResult {
   const activeRecords = filterActiveRecords(records);
 
-  // Time boundaries (IST aligned)
-  const todayStart = new Date(referenceDate);
-  todayStart.setHours(0, 0, 0, 0);
-  const todayEnd = new Date(referenceDate);
-  todayEnd.setHours(23, 59, 59, 999);
-
-  const monthStart = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), 1, 0, 0, 0, 0);
-  const monthEnd = new Date(referenceDate.getFullYear(), referenceDate.getMonth() + 1, 0, 23, 59, 59, 999);
+  // Time boundaries (Asia/Kolkata IST aligned)
+  const { start: todayStart, end: todayEnd } = getISTDayRange(referenceDate);
+  const { start: monthStart, end: monthEnd } = getISTMonthRange(referenceDate);
 
   let todayInflow = Money.zero();
   let todayOutflow = Money.zero();

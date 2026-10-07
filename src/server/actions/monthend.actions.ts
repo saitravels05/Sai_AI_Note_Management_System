@@ -7,6 +7,9 @@ import { Money, calculateNetProfit } from "@/lib/money";
 import { AuditAction, MonthStatus, PaymentMode, RecordType, Role } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 
+import { getRecordAmount, getRecordPaid, getRecordDue } from "@/lib/accounting-engine";
+import { getISTMonthRange } from "@/lib/date";
+
 export interface MonthAuditSummary {
   periodKey: string;
   isClosed: boolean;
@@ -25,8 +28,8 @@ export interface MonthAuditSummary {
 
 export async function getMonthAuditSummary(year: number, month: number): Promise<MonthAuditSummary> {
   const periodKey = `${year}-${month.toString().padStart(2, "0")}`;
-  const startDate = new Date(year, month - 1, 1);
-  const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+  // Exact Asia/Kolkata IST month boundaries
+  const { start: startDate, end: endDate } = getISTMonthRange(`${year}-${month.toString().padStart(2, "0")}-01`);
 
   const existingPeriod = await prisma.monthPeriod.findUnique({
     where: { periodKey },
@@ -38,6 +41,11 @@ export async function getMonthAuditSummary(year: number, month: number): Promise
       isVoid: false,
       isDeleted: false,
     },
+    include: {
+      customer: { select: { id: true, name: true } },
+      supplier: { select: { id: true, name: true } },
+    },
+    orderBy: { date: "asc" },
   });
 
   let totalIncome = Money.zero();
@@ -49,32 +57,37 @@ export async function getMonthAuditSummary(year: number, month: number): Promise
   const anomalies: string[] = [];
   const categoryBreakdown: Record<string, { income: Money; expense: Money }> = {};
 
-  const seenTitles = new Set<string>();
+  const seenTransactions = new Set<string>();
 
   for (const r of records) {
-    const amt = Money.from(r.amount);
+    const amt = getRecordAmount(r);
+    const paid = getRecordPaid(r, amt);
+    const due = getRecordDue(r, amt, paid);
     const cat = r.category;
+
     if (!categoryBreakdown[cat]) {
       categoryBreakdown[cat] = { income: Money.zero(), expense: Money.zero() };
     }
 
     if (r.type === RecordType.INCOME) {
-      totalIncome = totalIncome.add(amt);
-      categoryBreakdown[cat].income = categoryBreakdown[cat].income.add(amt);
+      const inflow = paid.isPositive() ? paid : amt;
+      totalIncome = totalIncome.add(inflow);
+      categoryBreakdown[cat].income = categoryBreakdown[cat].income.add(inflow);
 
       if (r.paymentMode === PaymentMode.CASH) {
-        cashBalance = cashBalance.add(amt);
+        cashBalance = cashBalance.add(inflow);
       } else if (r.paymentMode === PaymentMode.UPI || r.paymentMode === PaymentMode.BANK_TRANSFER || r.paymentMode === PaymentMode.CARD) {
-        bankBalance = bankBalance.add(amt);
+        bankBalance = bankBalance.add(inflow);
       }
     } else if (r.type === RecordType.EXPENSE || r.type === RecordType.REFUND) {
-      totalExpense = totalExpense.add(amt);
-      categoryBreakdown[cat].expense = categoryBreakdown[cat].expense.add(amt);
+      const outflow = r.type === RecordType.REFUND ? amt : (paid.isPositive() ? paid : amt);
+      totalExpense = totalExpense.add(outflow);
+      categoryBreakdown[cat].expense = categoryBreakdown[cat].expense.add(outflow);
 
       if (r.paymentMode === PaymentMode.CASH) {
-        cashBalance = cashBalance.sub(amt);
+        cashBalance = cashBalance.sub(outflow);
       } else if (r.paymentMode === PaymentMode.UPI || r.paymentMode === PaymentMode.BANK_TRANSFER || r.paymentMode === PaymentMode.CARD) {
-        bankBalance = bankBalance.sub(amt);
+        bankBalance = bankBalance.sub(outflow);
       }
     } else if (r.type === RecordType.TRANSFER) {
       const fromMode = r.paymentMode;
@@ -85,21 +98,51 @@ export async function getMonthAuditSummary(year: number, month: number): Promise
       if (toMode === PaymentMode.CASH) cashBalance = cashBalance.add(amt);
       else bankBalance = bankBalance.add(amt);
     } else if (r.type === RecordType.RECEIVABLE) {
-      customerDues = customerDues.add(r.balanceDue);
+      customerDues = customerDues.add(due);
+      if (paid.isPositive()) {
+        totalIncome = totalIncome.add(paid);
+        if (r.paymentMode === PaymentMode.CASH) cashBalance = cashBalance.add(paid);
+        else bankBalance = bankBalance.add(paid);
+      }
+    } else if (r.type === RecordType.PAYABLE) {
+      if (paid.isPositive()) {
+        totalExpense = totalExpense.add(paid);
+        if (r.paymentMode === PaymentMode.CASH) cashBalance = cashBalance.sub(paid);
+        else bankBalance = bankBalance.sub(paid);
+      }
     }
 
-    if (r.balanceDue && Money.from(r.balanceDue).greaterThan(0)) {
+    if (due.greaterThan(0)) {
       pendingCount++;
     }
 
-    // Anomaly checks
-    if (amt.isZero()) {
-      anomalies.push(`Card #${r.recordNumber} (${r.title}) has an amount of ₹0.`);
+    // LEGITIMATE ANOMALY DETECTIONS:
+    // 1. Truly ₹0 amount on financial record (not a plain NOTE, and has no amount in ANY field)
+    if (r.type !== RecordType.NOTE && amt.isZero()) {
+      anomalies.push(`Card #${r.recordNumber} (${r.title}) has an amount of ₹0 across all fields.`);
     }
-    if (seenTitles.has(r.title.toLowerCase().trim())) {
-      anomalies.push(`Possible duplicate title found: "${r.title}".`);
+
+    // 2. Negative amount
+    if (amt.isNegative()) {
+      anomalies.push(`Card #${r.recordNumber} (${r.title}) has an invalid negative amount (${amt.formatIndian(true)}).`);
+    }
+
+    // 3. Paid exceeds billed amount
+    if (paid.greaterThan(amt) && r.type !== RecordType.TRANSFER && amt.isPositive()) {
+      anomalies.push(`Card #${r.recordNumber} (${r.title}) amount paid (${paid.formatIndian(true)}) exceeds bill amount (${amt.formatIndian(true)}).`);
+    }
+
+    // 4. Outstanding customer due without customer assigned
+    if (due.greaterThan(0) && (r.type === RecordType.RECEIVABLE || r.type === RecordType.INCOME) && !r.customerId && !r.customer?.name) {
+      anomalies.push(`Card #${r.recordNumber} (${r.title}) has an unpaid due of ${due.formatIndian(true)} without an assigned customer.`);
+    }
+
+    // 5. Duplicate transaction detection
+    const dupKey = `${r.title.toLowerCase().trim()}_${amt.toFixed(2)}`;
+    if (seenTransactions.has(dupKey)) {
+      anomalies.push(`Possible duplicate entry found: "${r.title}" for ${amt.formatIndian(true)}.`);
     } else {
-      seenTitles.add(r.title.toLowerCase().trim());
+      seenTransactions.add(dupKey);
     }
   }
 

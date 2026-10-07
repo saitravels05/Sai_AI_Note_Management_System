@@ -206,6 +206,7 @@ export async function executeImportAction(
         type: item.type,
         category: item.category,
         amount: item.amount,
+        customerAmount: item.amount,
         amountPaid: item.amountPaid,
         balanceDue: item.balanceDue,
         paymentMode: item.paymentMode,
