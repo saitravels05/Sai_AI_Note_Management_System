@@ -36,6 +36,7 @@ export async function getMonthAuditSummary(year: number, month: number): Promise
     where: {
       date: { gte: startDate, lte: endDate },
       isVoid: false,
+      isDeleted: false,
     },
   });
 
@@ -66,7 +67,7 @@ export async function getMonthAuditSummary(year: number, month: number): Promise
       } else if (r.paymentMode === PaymentMode.UPI || r.paymentMode === PaymentMode.BANK_TRANSFER || r.paymentMode === PaymentMode.CARD) {
         bankBalance = bankBalance.add(amt);
       }
-    } else if (r.type === RecordType.EXPENSE) {
+    } else if (r.type === RecordType.EXPENSE || r.type === RecordType.REFUND) {
       totalExpense = totalExpense.add(amt);
       categoryBreakdown[cat].expense = categoryBreakdown[cat].expense.add(amt);
 
@@ -75,6 +76,14 @@ export async function getMonthAuditSummary(year: number, month: number): Promise
       } else if (r.paymentMode === PaymentMode.UPI || r.paymentMode === PaymentMode.BANK_TRANSFER || r.paymentMode === PaymentMode.CARD) {
         bankBalance = bankBalance.sub(amt);
       }
+    } else if (r.type === RecordType.TRANSFER) {
+      const fromMode = r.paymentMode;
+      const toMode = r.transferToMode || PaymentMode.BANK_TRANSFER;
+      if (fromMode === PaymentMode.CASH) cashBalance = cashBalance.sub(amt);
+      else bankBalance = bankBalance.sub(amt);
+
+      if (toMode === PaymentMode.CASH) cashBalance = cashBalance.add(amt);
+      else bankBalance = bankBalance.add(amt);
     } else if (r.type === RecordType.RECEIVABLE) {
       customerDues = customerDues.add(r.balanceDue);
     }

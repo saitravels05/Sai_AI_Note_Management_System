@@ -27,6 +27,9 @@ enum RecordType {
   EXPENSE       // Money Spent
   RECEIVABLE    // Due to Receive
   PAYABLE       // Due to Pay
+  REFUND        // Refund
+  TRANSFER      // Transfer (cash <-> bank)
+  NOTE          // Plain non-financial diary note
 }
 
 enum ServiceCategory {
@@ -38,6 +41,7 @@ enum ServiceCategory {
   PASSPORT_SERVICE
   VISA_SERVICE
   VEHICLE_RENTAL
+  INSURANCE
   OFFICE_EXPENSE
   COMMISSION
   OTHER
@@ -55,6 +59,7 @@ enum PaymentStatus {
   COMPLETED
   PARTIAL
   PENDING
+  CANCELLED
 }
 
 enum MonthStatus {
@@ -69,6 +74,7 @@ enum AuditAction {
   UPDATE_RECORD
   VOID_RECORD
   DELETE_RECORD
+  RESTORE_RECORD
   CLOSE_MONTH
   UNLOCK_MONTH
   IMPORT_EXCEL
@@ -100,6 +106,7 @@ model User {
   createdRecords     NoteRecord[] @relation("CreatedBy")
   updatedRecords     NoteRecord[] @relation("UpdatedBy")
   voidedRecords      NoteRecord[] @relation("VoidedBy")
+  deletedRecords     NoteRecord[] @relation("DeletedBy")
   closedMonths       MonthPeriod[] @relation("ClosedBy")
   unlockedMonths     MonthPeriod[] @relation("UnlockedBy")
   auditLogs          AuditLog[]
@@ -247,6 +254,11 @@ model NoteRecord {
   commissionAmount  Decimal         @default(0.00) @db.Decimal(15, 2)
   discountAmount    Decimal         @default(0.00) @db.Decimal(15, 2)
   date              DateTime        @default(now())
+  referenceNumber   String?         // Booking / PNR / Ticket / ARN / Visa ref #
+  travelDate        DateTime?       // Travel or Appointment date
+  passengerCount    Int?            @default(1)
+  gstType           String?         @default("NONE") // NONE, INCLUDED, EXTRA
+  transferToMode    PaymentMode?    // For TRANSFER: destination mode
   tags              String[]        @default([])
   isPinned          Boolean         @default(false)
   color             String?         @default("amber") // amber, emerald, sky, rose, indigo, purple
@@ -269,6 +281,11 @@ model NoteRecord {
   voidedById        String?
   voidedBy          User?           @relation("VoidedBy", fields: [voidedById], references: [id])
 
+  isDeleted         Boolean         @default(false)
+  deletedAt         DateTime?
+  deletedById       String?
+  deletedBy         User?           @relation("DeletedBy", fields: [deletedById], references: [id])
+
   monthPeriodId     String?
   monthPeriod       MonthPeriod?    @relation(fields: [monthPeriodId], references: [id])
 
@@ -286,8 +303,13 @@ model NoteRecord {
   @@index([date])
   @@index([type])
   @@index([category])
+  @@index([customerId])
+  @@index([supplierId])
   @@index([createdById])
   @@index([isVoid])
+  @@index([isDeleted])
+  @@index([paymentMode])
+  @@index([paymentStatus])
 }
 
 model DocumentAttachment {
@@ -444,5 +466,16 @@ model Branch {
   address     String?
   isMain      Boolean  @default(false)
   createdAt   DateTime @default(now())
+}
+
+model PaymentAccount {
+  id             String      @id @default(uuid())
+  accountType    PaymentMode @unique // CASH, BANK_TRANSFER, UPI
+  name           String      // "Cash in Hand", "Current A/c (Axis Bank)", "Google Pay / UPI"
+  accountNumber  String?     // Bank A/c No or UPI ID
+  openingBalance Decimal     @default(0.00) @db.Decimal(15, 2)
+  asOfDate       DateTime    @default(now())
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
 }
 

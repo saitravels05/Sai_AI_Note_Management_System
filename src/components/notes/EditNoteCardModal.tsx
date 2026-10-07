@@ -264,6 +264,9 @@ export function EditNoteCardModal({
                 <option value={RecordType.EXPENSE}>{t.moneySpent}</option>
                 <option value={RecordType.RECEIVABLE}>{t.dueToReceive}</option>
                 <option value={RecordType.PAYABLE}>{t.dueToPay}</option>
+                <option value={RecordType.REFUND}>{t.refund}</option>
+                <option value={RecordType.TRANSFER}>{t.transfer}</option>
+                <option value={RecordType.NOTE}>{t.plainNote}</option>
               </select>
             </div>
 

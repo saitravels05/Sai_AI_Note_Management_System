@@ -102,6 +102,7 @@ export function RecordsClient({ initialRecords }: RecordsClientProps) {
           <option value="PASSPORT_SERVICE">Passport Services</option>
           <option value="VISA_SERVICE">Visa Services</option>
           <option value="VEHICLE_RENTAL">Vehicle Rentals</option>
+          <option value="INSURANCE">Insurance Services</option>
           <option value="OFFICE_EXPENSE">Office Expenses</option>
           <option value="OTHER">Other</option>
         </select>
@@ -117,6 +118,9 @@ export function RecordsClient({ initialRecords }: RecordsClientProps) {
           <option value="EXPENSE">Money Spent (Outflow)</option>
           <option value="RECEIVABLE">Customer Dues</option>
           <option value="PAYABLE">Supplier Dues</option>
+          <option value="REFUND">Refunds</option>
+          <option value="TRANSFER">Transfers (Cash ↔ Bank)</option>
+          <option value="NOTE">Plain Notes</option>
         </select>
 
         <span className="text-xs text-slate-400 font-semibold ml-auto">

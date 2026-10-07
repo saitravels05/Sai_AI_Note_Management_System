@@ -2,7 +2,15 @@ import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/db";
 import { Money } from "@/lib/money";
 import { ExecutiveDashboard } from "@/components/dashboard/ExecutiveDashboard";
-import { RecordType, PassportAppStatus } from "@prisma/client";
+import {
+  calculateDashboardMetrics,
+  calculateCustomerLedgers,
+  calculateSupplierLedgers,
+  diagnoseDataHealth,
+  verifySystemReconciliation,
+  OpeningBalances,
+} from "@/lib/accounting-engine";
+import { RecordType, Role, PaymentMode, PassportAppStatus } from "@prisma/client";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -19,57 +27,47 @@ export default async function HomePage() {
   }
 
   const today = new Date();
-  today.setHours(0, 0, 0, 0);
 
-  // Filter boundary for charts: start of month, 5 months ago
-  const sixMonthsAgo = new Date();
-  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
-  sixMonthsAgo.setDate(1);
-  sixMonthsAgo.setHours(0, 0, 0, 0);
+  // Role-based where clause (Server-side RBAC enforcement)
+  const isStaff = session.role === Role.STAFF;
+  const recordsWhere: any = {
+    isVoid: false,
+    isDeleted: false,
+  };
+  if (isStaff) {
+    recordsWhere.createdById = session.id;
+  }
 
-  // High-performance parallelized data fetching
+  // Parallel database queries
   const [
-    recentRecords,
-    activeRecordsSubset,
-    customerDuesAgg,
-    supplierPayablesAgg,
+    allRecords,
+    paymentAccounts,
+    customers,
+    suppliers,
     passportAppsCount,
   ] = await Promise.all([
-    // 1. Fetch only the 15 most recent records with joins
+    // 1. All active journal records (master source of truth)
     prisma.noteRecord.findMany({
-      where: { isVoid: false },
+      where: recordsWhere,
       include: {
         customer: { select: { id: true, name: true, phone: true } },
         supplier: { select: { id: true, name: true } },
+        createdBy: { select: { id: true, name: true } },
       },
       orderBy: { date: "desc" },
-      take: 15,
     }),
 
-    // 2. Fetch only minimal scalar fields for 6-month trends and today's cashflow
-    prisma.noteRecord.findMany({
-      where: {
-        isVoid: false,
-        date: { gte: sixMonthsAgo },
-      },
-      select: {
-        type: true,
-        category: true,
-        amount: true,
-        date: true,
-      },
+    // 2. Configured payment accounts with opening balances
+    prisma.paymentAccount.findMany(),
+
+    // 3. Customers for ledger reconciliation
+    prisma.customer.findMany({
+      select: { id: true, name: true, phone: true },
     }),
 
-    // 3. Ultra-fast database native aggregation for customer receivables
-    prisma.noteRecord.aggregate({
-      where: { isVoid: false, balanceDue: { gt: 0 } },
-      _sum: { balanceDue: true },
-    }),
-
-    // 4. Ultra-fast database native aggregation for supplier payables
-    prisma.supplier.aggregate({
-      where: { balanceDue: { gt: 0 } },
-      _sum: { balanceDue: true },
+    // 4. Suppliers for vendor ledger reconciliation
+    prisma.supplier.findMany({
+      select: { id: true, name: true, phone: true, category: true },
     }),
 
     // 5. Active passport apps count
@@ -82,17 +80,39 @@ export default async function HomePage() {
     }),
   ]);
 
-  let todayInflow = Money.zero();
-  let todayOutflow = Money.zero();
+  // Construct Opening Balances
+  const openingBalances: OpeningBalances = {
+    cash: Money.zero(),
+    bank: Money.zero(),
+    upi: Money.zero(),
+  };
 
-  // Category accumulation
-  const categorySums: Record<string, Money> = {};
+  for (const acc of paymentAccounts) {
+    const bal = Money.from(acc.openingBalance);
+    if (acc.accountType === PaymentMode.CASH) {
+      openingBalances.cash = bal;
+    } else if (acc.accountType === PaymentMode.BANK_TRANSFER || acc.accountType === PaymentMode.CARD) {
+      openingBalances.bank = openingBalances.bank.add(bal);
+    } else if (acc.accountType === PaymentMode.UPI) {
+      openingBalances.upi = bal;
+    }
+  }
 
-  // Monthly trend accumulation (last 6 months)
+  // 100% Deterministic Central Calculation Engine
+  const metricsResult = calculateDashboardMetrics(allRecords, openingBalances, today);
+  const customerLedgers = calculateCustomerLedgers(customers, allRecords);
+  const supplierLedgers = calculateSupplierLedgers(suppliers, allRecords);
+  const reconciliation = verifySystemReconciliation(allRecords, customerLedgers, supplierLedgers);
+  const healthIssues = diagnoseDataHealth(allRecords, {
+    cash: metricsResult.cashBalance,
+    bank: metricsResult.bankBalance,
+    upi: metricsResult.upiBalance,
+  });
+
+  // Calculate 6-month trend array for Recharts
   const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const trendMap: Record<string, { income: Money; expense: Money }> = {};
 
-  // Initialize last 6 months in order
   for (let i = 5; i >= 0; i--) {
     const d = new Date();
     d.setMonth(d.getMonth() - i);
@@ -100,40 +120,19 @@ export default async function HomePage() {
     trendMap[key] = { income: Money.zero(), expense: Money.zero() };
   }
 
-  for (const r of activeRecordsSubset) {
+  for (const r of allRecords) {
     const amt = Money.from(r.amount);
     const rDate = new Date(r.date);
-    const dateStart = new Date(r.date);
-    dateStart.setHours(0, 0, 0, 0);
-
-    // Today's metrics
-    if (dateStart.getTime() === today.getTime()) {
-      if (r.type === RecordType.INCOME) todayInflow = todayInflow.add(amt);
-      if (r.type === RecordType.EXPENSE) todayOutflow = todayOutflow.add(amt);
-    }
-
-    // Category breakdown (for Inflow)
-    if (r.type === RecordType.INCOME) {
-      const catKey = r.category.replace(/_/g, " ");
-      categorySums[catKey] = (categorySums[catKey] || Money.zero()).add(amt);
-    }
-
-    // Monthly trend
     const monthKey = `${monthNames[rDate.getMonth()]} '${rDate.getFullYear().toString().slice(-2)}`;
     if (trendMap[monthKey]) {
       if (r.type === RecordType.INCOME) {
         trendMap[monthKey].income = trendMap[monthKey].income.add(amt);
-      } else if (r.type === RecordType.EXPENSE) {
+      } else if (r.type === RecordType.EXPENSE || r.type === RecordType.REFUND) {
         trendMap[monthKey].expense = trendMap[monthKey].expense.add(amt);
       }
     }
   }
 
-  const totalCustomerDues = Money.from(customerDuesAgg._sum.balanceDue || 0);
-  const totalSupplierPayables = Money.from(supplierPayablesAgg._sum.balanceDue || 0);
-  const netBalance = todayInflow.sub(todayOutflow);
-
-  // Format monthly trend array for Recharts
   const monthlyTrend = Object.entries(trendMap).map(([month, data]) => ({
     month,
     income: data.income.toNumber(),
@@ -141,33 +140,100 @@ export default async function HomePage() {
     net: data.income.sub(data.expense).toNumber(),
   }));
 
-  // Format category data array for Recharts
-  const finalCategoryData = Object.entries(categorySums)
+  // Category chart data
+  const finalCategoryData = Object.entries(metricsResult.categoryIncomeBreakdown)
     .map(([name, val]) => ({
-      name,
+      name: name.replace(/_/g, " "),
       value: val.toNumber(),
     }))
     .sort((a, b) => b.value - a.value)
-    .slice(0, 6);
+    .slice(0, 7);
 
-  // Recent 15 records
-  const serializedRecent = recentRecords.map((r) => ({
+  // Serialized Helper for Drill Down items
+  const serializeDrillItem = (r: any) => ({
+    id: r.id,
+    recordNumber: r.recordNumber,
+    title: r.title,
+    date: new Date(r.date).toISOString().split("T")[0],
+    type: r.type,
+    category: r.category,
+    amount: Money.from(r.amount).formatIndian(false),
+    amountPaid: Money.from(r.amountPaid).formatIndian(false),
+    balanceDue: Money.from(r.balanceDue).formatIndian(false),
+    paymentMode: r.paymentMode,
+    customerName: r.customer?.name || null,
+    customerPhone: r.customer?.phone || null,
+    notes: r.notes || null,
+  });
+
+  const todayStart = new Date(today);
+  todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date(today);
+  todayEnd.setHours(23, 59, 59, 999);
+
+  // Build Drill-down Datasets
+  const drillDownDatasets = {
+    todayInflow: allRecords
+      .filter((r) => {
+        const d = new Date(r.date);
+        return d >= todayStart && d <= todayEnd && r.type === RecordType.INCOME;
+      })
+      .map(serializeDrillItem),
+
+    todayOutflow: allRecords
+      .filter((r) => {
+        const d = new Date(r.date);
+        return d >= todayStart && d <= todayEnd && (r.type === RecordType.EXPENSE || r.type === RecordType.REFUND);
+      })
+      .map(serializeDrillItem),
+
+    customerDues: allRecords
+      .filter((r) => Money.from(r.balanceDue).greaterThan(0) && (r.type === RecordType.RECEIVABLE || r.type === RecordType.INCOME))
+      .map(serializeDrillItem),
+
+    supplierPayables: allRecords
+      .filter((r) => Money.from(r.balanceDue).greaterThan(0) && (r.type === RecordType.PAYABLE || r.type === RecordType.EXPENSE))
+      .map(serializeDrillItem),
+
+    cashJournal: allRecords
+      .filter((r) => r.paymentMode === PaymentMode.CASH)
+      .slice(0, 40)
+      .map(serializeDrillItem),
+
+    bankJournal: allRecords
+      .filter((r) => r.paymentMode === PaymentMode.BANK_TRANSFER || r.paymentMode === PaymentMode.CARD)
+      .slice(0, 40)
+      .map(serializeDrillItem),
+
+    upiJournal: allRecords
+      .filter((r) => r.paymentMode === PaymentMode.UPI)
+      .slice(0, 40)
+      .map(serializeDrillItem),
+  };
+
+  // Staff collection (for Owner/Admin/Manager)
+  const staffCollectionList = Object.values(metricsResult.staffCollectionBreakdown).map((s) => ({
+    staffName: s.staffName,
+    totalCollected: s.totalCollected.formatIndian(true),
+    count: s.count,
+  }));
+
+  // Recent 15 records for the bottom table
+  const recentRecords = allRecords.slice(0, 15).map((r) => ({
     id: r.id,
     recordNumber: r.recordNumber,
     title: r.title,
     type: r.type,
     category: r.category,
     amount: Money.from(r.amount).formatIndian(false),
-    customerAmount: r.customerAmount ? Money.from(r.customerAmount).formatIndian(false) : null,
-    agentAmount: r.agentAmount ? Money.from(r.agentAmount).formatIndian(false) : null,
-    serviceCharge: r.serviceCharge ? Money.from(r.serviceCharge).formatIndian(false) : null,
     amountPaid: Money.from(r.amountPaid).formatIndian(false),
     balanceDue: Money.from(r.balanceDue).formatIndian(false),
     paymentMode: r.paymentMode,
     paymentStatus: r.paymentStatus,
-    date: r.date.toISOString().split("T")[0],
+    date: new Date(r.date).toISOString().split("T")[0],
     customerName: r.customer?.name || null,
     customerPhone: r.customer?.phone || null,
+    notes: r.notes || null,
   }));
 
   return (
@@ -178,18 +244,37 @@ export default async function HomePage() {
         role: session.role,
       }}
       metrics={{
-        todayInflow: todayInflow.formatIndian(true),
-        todayOutflow: todayOutflow.formatIndian(true),
-        netBalance: netBalance.formatIndian(true),
-        totalCustomerDues: totalCustomerDues.formatIndian(true),
-        totalSupplierPayables: totalSupplierPayables.formatIndian(true),
+        todayInflow: metricsResult.todayInflow.formatIndian(true),
+        todayOutflow: metricsResult.todayOutflow.formatIndian(true),
+        netBalance: metricsResult.todayNet.formatIndian(true),
+        totalCustomerDues: metricsResult.totalCustomerDues.formatIndian(true),
+        totalSupplierPayables: metricsResult.totalSupplierPayables.formatIndian(true),
         activePassportAppsCount: passportAppsCount,
-        rawTodayInflow: todayInflow.toNumber(),
-        rawTodayOutflow: todayOutflow.toNumber(),
+        cashBalance: metricsResult.cashBalance.formatIndian(true),
+        bankBalance: metricsResult.bankBalance.formatIndian(true),
+        upiBalance: metricsResult.upiBalance.formatIndian(true),
+        totalLiquidBalance: metricsResult.totalLiquidBalance.formatIndian(true),
+        thisMonthIncome: metricsResult.thisMonthIncome.formatIndian(true),
+        thisMonthExpense: metricsResult.thisMonthExpense.formatIndian(true),
+        thisMonthNetProfit: metricsResult.thisMonthNetProfit.formatIndian(true),
+        thisMonthCommission: metricsResult.thisMonthCommission.formatIndian(true),
+        thisMonthGstPayable: metricsResult.thisMonthGstPayable.formatIndian(true),
+        upcomingTripsCount: metricsResult.upcomingTripsCount,
       }}
+      reconciliation={{
+        isReconciled: reconciliation.isReconciled,
+        greenTick: reconciliation.greenTick,
+        statusText: reconciliation.statusText,
+        dashboardNet: reconciliation.dashboardNet,
+        journalSum: reconciliation.journalSum,
+        discrepancies: reconciliation.discrepancies,
+      }}
+      healthIssues={healthIssues}
+      staffCollection={session.role !== Role.STAFF ? staffCollectionList : undefined}
+      drillDownDatasets={drillDownDatasets}
       monthlyTrend={monthlyTrend}
       categoryData={finalCategoryData}
-      recentRecords={serializedRecent}
+      recentRecords={recentRecords}
     />
   );
 }

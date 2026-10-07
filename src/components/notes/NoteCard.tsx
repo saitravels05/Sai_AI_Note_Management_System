@@ -111,6 +111,28 @@ export function NoteCard({
           amountColor: "text-purple-600 dark:text-purple-400",
           label: t.dueToPay,
         };
+      case RecordType.REFUND:
+        return {
+          border: "border-pink-200 dark:border-pink-800",
+          badge: "bg-pink-100 text-pink-800 dark:bg-pink-950 dark:text-pink-300",
+          amountColor: "text-pink-600 dark:text-pink-400",
+          label: t.refund,
+        };
+      case RecordType.TRANSFER:
+        return {
+          border: "border-blue-200 dark:border-blue-800",
+          badge: "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300",
+          amountColor: "text-blue-600 dark:text-blue-400",
+          label: t.transfer,
+        };
+      case RecordType.NOTE:
+      default:
+        return {
+          border: "border-slate-200 dark:border-slate-800",
+          badge: "bg-slate-100 text-slate-800 dark:bg-slate-950 dark:text-slate-300",
+          amountColor: "text-slate-600 dark:text-slate-400",
+          label: t.plainNote,
+        };
     }
   };
 
@@ -226,7 +248,7 @@ export function NoteCard({
 
         {/* Category Badge */}
         <span className="px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
-          {t.categories[category] || category}
+          {(t.categories as Record<string, string>)[category] || category}
         </span>
 
         {/* Payment Mode Badge */}

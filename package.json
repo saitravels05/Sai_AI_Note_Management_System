@@ -23,6 +23,7 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "bootstrap:owner": "tsx scripts/bootstrap-owner.ts",
+    "seed:master": "tsx scripts/seed-master-journal.ts",
     "test:security": "tsx --test tests/security/*.test.ts"
   },
   "dependencies": {
