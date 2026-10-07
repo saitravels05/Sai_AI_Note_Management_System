@@ -127,6 +127,50 @@ export interface ReconciliationStatus {
 }
 
 /**
+ * Safely extract the primary financial value of a journal entry.
+ * Resolves amount, customerAmount, agentAmount, or serviceCharge gracefully.
+ */
+export function getRecordAmount(r: any): Money {
+  if (r.amount !== undefined && r.amount !== null && Number(r.amount) > 0) {
+    return Money.from(r.amount);
+  }
+  if (r.customerAmount !== undefined && r.customerAmount !== null && Number(r.customerAmount) > 0) {
+    return Money.from(r.customerAmount);
+  }
+  if (r.agentAmount !== undefined && r.agentAmount !== null && Number(r.agentAmount) > 0) {
+    return Money.from(r.agentAmount);
+  }
+  if (r.serviceCharge !== undefined && r.serviceCharge !== null && Number(r.serviceCharge) > 0) {
+    return Money.from(r.serviceCharge);
+  }
+  return Money.from(r.amount || 0);
+}
+
+export function getRecordPaid(r: any, effectiveAmt?: Money): Money {
+  const base = effectiveAmt || getRecordAmount(r);
+  if (r.amountPaid !== undefined && r.amountPaid !== null) {
+    return Money.from(r.amountPaid);
+  }
+  if (r.paymentStatus === "COMPLETED" && r.paymentMode !== "CREDIT_UNPAID") {
+    return base;
+  }
+  return Money.zero();
+}
+
+export function getRecordDue(r: any, effectiveAmt?: Money, effectivePaid?: Money): Money {
+  const base = effectiveAmt || getRecordAmount(r);
+  const paid = effectivePaid || getRecordPaid(r, base);
+  if (r.balanceDue !== undefined && r.balanceDue !== null) {
+    return Money.from(r.balanceDue);
+  }
+  if (r.paymentStatus === "COMPLETED") {
+    return Money.zero();
+  }
+  const calc = base.sub(paid);
+  return calc.isPositive() ? calc : Money.zero();
+}
+
+/**
  * Filter only active, non-voided, non-deleted entries
  */
 export function filterActiveRecords<T extends { isVoid?: boolean; isDeleted?: boolean }>(records: T[]): T[] {
@@ -185,9 +229,9 @@ export function calculateDashboardMetrics(
 
   for (const r of activeRecords) {
     const rDate = new Date(r.date);
-    const amt = Money.from(r.amount);
-    const paid = Money.from(r.amountPaid);
-    const due = Money.from(r.balanceDue);
+    const amt = getRecordAmount(r);
+    const paid = getRecordPaid(r, amt);
+    const due = getRecordDue(r, amt, paid);
     const commission = Money.from(r.commissionAmount || r.serviceCharge || 0);
     const gstAmt = Money.from(r.gstAmount || 0);
 
@@ -433,9 +477,9 @@ export function calculateCustomerLedgers(
     }
 
     const ledger = result[r.customerId];
-    const amt = Money.from(r.amount);
-    const paid = Money.from(r.amountPaid);
-    const due = Money.from(r.balanceDue);
+    const amt = getRecordAmount(r);
+    const paid = getRecordPaid(r, amt);
+    const due = getRecordDue(r, amt, paid);
 
     ledger.entriesCount++;
     ledger.totalBilled = ledger.totalBilled.add(amt);
@@ -524,9 +568,9 @@ export function calculateSupplierLedgers(
     }
 
     const ledger = result[r.supplierId];
-    const amt = Money.from(r.amount);
-    const paid = Money.from(r.amountPaid);
-    const due = Money.from(r.balanceDue);
+    const amt = getRecordAmount(r);
+    const paid = getRecordPaid(r, amt);
+    const due = getRecordDue(r, amt, paid);
 
     ledger.entriesCount++;
     ledger.totalBilled = ledger.totalBilled.add(amt);
@@ -596,8 +640,9 @@ export function diagnoseDataHealth(
   const seenTransactions = new Map<string, Array<{ id: string; date: Date }>>();
 
   for (const r of active) {
-    const amt = Money.from(r.amount);
-    const due = Money.from(r.balanceDue);
+    const amt = getRecordAmount(r);
+    const paid = getRecordPaid(r, amt);
+    const due = getRecordDue(r, amt, paid);
 
     // Missing amount on financial records
     if (r.type !== RecordType.NOTE && amt.isZero()) {
@@ -677,9 +722,9 @@ export function verifySystemReconciliation(
   let journalSupplierDues = Money.zero();
 
   for (const r of active) {
-    const amt = Money.from(r.amount);
-    const paid = Money.from(r.amountPaid);
-    const due = Money.from(r.balanceDue);
+    const amt = getRecordAmount(r);
+    const paid = getRecordPaid(r, amt);
+    const due = getRecordDue(r, amt, paid);
 
     if (r.type === RecordType.INCOME) journalIncome = journalIncome.add(paid.isPositive() ? paid : amt);
     if (r.type === RecordType.EXPENSE || r.type === RecordType.REFUND) journalExpense = journalExpense.add(amt);

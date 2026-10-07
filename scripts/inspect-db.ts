@@ -25,18 +25,37 @@ async function main() {
     prisma.businessProfile.count(),
   ]);
 
-  console.log("DB STATUS:");
-  console.log({
-    users,
-    recordsCount: records,
-    customersCount: customers,
-    suppliersCount: suppliers,
-    invoicesCount: invoices,
-    passportAppsCount: passportApps,
-    monthPeriodsCount: months,
-    branchesCount: branches,
-    businessProfilesCount: business,
+  const allRecords = await prisma.noteRecord.findMany({
+    select: {
+      id: true,
+      recordNumber: true,
+      title: true,
+      type: true,
+      amount: true,
+      customerAmount: true,
+      agentAmount: true,
+      serviceCharge: true,
+      amountPaid: true,
+      balanceDue: true,
+      date: true,
+      isDeleted: true,
+    },
+    orderBy: { recordNumber: "asc" },
   });
+
+  console.table(
+    allRecords.map((r) => ({
+      recordNumber: r.recordNumber,
+      title: r.title,
+      type: r.type,
+      amount: r.amount?.toString(),
+      customerAmount: r.customerAmount?.toString(),
+      agentAmount: r.agentAmount?.toString(),
+      serviceCharge: r.serviceCharge?.toString(),
+      date: r.date?.toISOString(),
+      isDeleted: r.isDeleted,
+    }))
+  );
 }
 
 main()

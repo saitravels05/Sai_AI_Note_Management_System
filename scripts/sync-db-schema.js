@@ -25,6 +25,17 @@ async function sync() {
         },
       });
       console.log("[DB SYNC] Schema successfully synchronized to remote database!");
+
+      console.log("[DB SYNC] Running automated journal record self-healing...");
+      execSync("npx tsx scripts/auto-heal-records.ts", {
+        stdio: "inherit",
+        env: {
+          ...process.env,
+          DATABASE_URL: dbUrl,
+          DIRECT_URL: directUrl,
+        },
+      });
+      console.log("[DB SYNC] Self-healing complete!");
     } catch (err) {
       console.error("[DB SYNC ERROR] Schema synchronization failed:", err.message);
       process.exit(1);

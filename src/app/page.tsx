@@ -8,6 +8,9 @@ import {
   calculateSupplierLedgers,
   diagnoseDataHealth,
   verifySystemReconciliation,
+  getRecordAmount,
+  getRecordPaid,
+  getRecordDue,
   OpeningBalances,
 } from "@/lib/accounting-engine";
 import { RecordType, Role, PaymentMode, PassportAppStatus } from "@prisma/client";
@@ -121,7 +124,7 @@ export default async function HomePage() {
   }
 
   for (const r of allRecords) {
-    const amt = Money.from(r.amount);
+    const amt = getRecordAmount(r);
     const rDate = new Date(r.date);
     const monthKey = `${monthNames[rDate.getMonth()]} '${rDate.getFullYear().toString().slice(-2)}`;
     if (trendMap[monthKey]) {
@@ -150,21 +153,26 @@ export default async function HomePage() {
     .slice(0, 7);
 
   // Serialized Helper for Drill Down items
-  const serializeDrillItem = (r: any) => ({
-    id: r.id,
-    recordNumber: r.recordNumber,
-    title: r.title,
-    date: new Date(r.date).toISOString().split("T")[0],
-    type: r.type,
-    category: r.category,
-    amount: Money.from(r.amount).formatIndian(false),
-    amountPaid: Money.from(r.amountPaid).formatIndian(false),
-    balanceDue: Money.from(r.balanceDue).formatIndian(false),
-    paymentMode: r.paymentMode,
-    customerName: r.customer?.name || null,
-    customerPhone: r.customer?.phone || null,
-    notes: r.notes || null,
-  });
+  const serializeDrillItem = (r: any) => {
+    const amt = getRecordAmount(r);
+    const paid = getRecordPaid(r, amt);
+    const due = getRecordDue(r, amt, paid);
+    return {
+      id: r.id,
+      recordNumber: r.recordNumber,
+      title: r.title,
+      date: new Date(r.date).toISOString().split("T")[0],
+      type: r.type,
+      category: r.category,
+      amount: amt.formatIndian(false),
+      amountPaid: paid.formatIndian(false),
+      balanceDue: due.formatIndian(false),
+      paymentMode: r.paymentMode,
+      customerName: r.customer?.name || null,
+      customerPhone: r.customer?.phone || null,
+      notes: r.notes || null,
+    };
+  };
 
   const todayStart = new Date(today);
   todayStart.setHours(0, 0, 0, 0);
@@ -188,11 +196,11 @@ export default async function HomePage() {
       .map(serializeDrillItem),
 
     customerDues: allRecords
-      .filter((r) => Money.from(r.balanceDue).greaterThan(0) && (r.type === RecordType.RECEIVABLE || r.type === RecordType.INCOME))
+      .filter((r) => getRecordDue(r).greaterThan(0) && (r.type === RecordType.RECEIVABLE || r.type === RecordType.INCOME))
       .map(serializeDrillItem),
 
     supplierPayables: allRecords
-      .filter((r) => Money.from(r.balanceDue).greaterThan(0) && (r.type === RecordType.PAYABLE || r.type === RecordType.EXPENSE))
+      .filter((r) => getRecordDue(r).greaterThan(0) && (r.type === RecordType.PAYABLE || r.type === RecordType.EXPENSE))
       .map(serializeDrillItem),
 
     cashJournal: allRecords

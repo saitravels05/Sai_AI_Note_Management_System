@@ -546,40 +546,6 @@ export function ExecutiveDashboard({
             </Link>
           </div>
         </div>
-
-        {/* THIS MONTH EXECUTIVE RECAP STRIP */}
-        <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-wrap items-center justify-between gap-4 text-xs">
-          <div>
-            <span className="font-bold text-slate-900 dark:text-white uppercase tracking-wider text-[11px]">
-              This Month Summary:
-            </span>
-            <span className="text-slate-500 ml-2">All-in-one monthly accounting performance</span>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-6 font-mono font-medium">
-            <div>
-              <span className="text-slate-400 text-[11px]">Income: </span>
-              <strong className="text-emerald-600 dark:text-emerald-400">{metrics.thisMonthIncome}</strong>
-            </div>
-            <div>
-              <span className="text-slate-400 text-[11px]">Expense: </span>
-              <strong className="text-rose-600 dark:text-rose-400">{metrics.thisMonthExpense}</strong>
-            </div>
-            <div>
-              <span className="text-slate-400 text-[11px]">Net Profit: </span>
-              <strong className="text-indigo-600 dark:text-indigo-400">{metrics.thisMonthNetProfit}</strong>
-            </div>
-            <div>
-              <span className="text-slate-400 text-[11px]">Commission: </span>
-              <strong className="text-amber-600 dark:text-amber-400">{metrics.thisMonthCommission}</strong>
-            </div>
-            <div>
-              <span className="text-slate-400 text-[11px]">GST Payable: </span>
-              <strong className="text-slate-700 dark:text-slate-300">{metrics.thisMonthGstPayable}</strong>
-            </div>
-          </div>
-        </div>
-
         {/* Visual Analytics Charts: Area Chart + Category Breakdown */}
         <AnalyticsCharts monthlyTrend={monthlyTrend} categoryData={categoryData} />
 

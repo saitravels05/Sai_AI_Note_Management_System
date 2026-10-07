@@ -13,6 +13,8 @@ import { RecordType, ServiceCategory, PaymentMode, PaymentStatus } from "@prisma
 
 // Test Helper to construct mock NoteRecord entries
 function createMockRecord(overrides: Partial<any>): any {
+  const baseAmt = overrides.amount !== undefined ? overrides.amount : "1000.00";
+  const isZero = Number(baseAmt) === 0;
   return {
     id: `rec-${Math.random().toString(36).substring(2, 9)}`,
     recordNumber: `SAI-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -20,10 +22,10 @@ function createMockRecord(overrides: Partial<any>): any {
     notes: null,
     type: RecordType.INCOME,
     category: ServiceCategory.FLIGHT_TICKET,
-    amount: "1000.00",
-    customerAmount: "1000.00",
-    agentAmount: "800.00",
-    serviceCharge: "200.00",
+    amount: baseAmt,
+    customerAmount: overrides.customerAmount !== undefined ? overrides.customerAmount : (isZero ? "0.00" : "1000.00"),
+    agentAmount: overrides.agentAmount !== undefined ? overrides.agentAmount : (isZero ? "0.00" : "800.00"),
+    serviceCharge: overrides.serviceCharge !== undefined ? overrides.serviceCharge : (isZero ? "0.00" : "200.00"),
     commissionAmount: "0.00",
     discountAmount: "0.00",
     amountPaid: "1000.00",
