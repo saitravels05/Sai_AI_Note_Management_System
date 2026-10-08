@@ -18,6 +18,7 @@ import { RecordType, Role, PaymentMode, PassportAppStatus } from "@prisma/client
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default async function HomePage() {
   const session = await getSession();
@@ -32,15 +33,11 @@ export default async function HomePage() {
 
   const today = new Date();
 
-  // Role-based where clause (Server-side RBAC enforcement)
-  const isStaff = session.role === Role.STAFF;
+  // All active, non-voided journal records for the agency dashboard
   const recordsWhere: any = {
     isVoid: false,
     isDeleted: false,
   };
-  if (isStaff) {
-    recordsWhere.createdById = session.id;
-  }
 
   // Parallel database queries
   const [

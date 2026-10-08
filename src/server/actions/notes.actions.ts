@@ -611,12 +611,13 @@ export async function restoreNoteCardAction(recordId: string) {
 }
 
 function revalidateAllPaths() {
-  revalidatePath("/");
-  revalidatePath("/records");
-  revalidatePath("/customers");
-  revalidatePath("/suppliers");
-  revalidatePath("/receivables");
-  revalidatePath("/reports");
-  revalidatePath("/passport-visa");
-  revalidatePath("/month-end");
+  revalidatePath("/", "layout");
+  revalidatePath("/", "page");
+  revalidatePath("/records", "page");
+  revalidatePath("/customers", "page");
+  revalidatePath("/suppliers", "page");
+  revalidatePath("/receivables", "page");
+  revalidatePath("/reports", "page");
+  revalidatePath("/passport-visa", "page");
+  revalidatePath("/month-end", "page");
 }
